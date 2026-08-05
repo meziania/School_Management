@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { sendParentInvitation } from '@/lib/resend'
 
 /**
  * GET /api/admin/teachers — Liste des professeurs et leurs classes assignées
@@ -28,13 +27,13 @@ export async function GET() {
     }
 
     return NextResponse.json({ data: teachers, error: null })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
   }
 }
 
 /**
- * POST /api/admin/teachers — Ajouter/Inviter un professeur & lui assigner une classe/matière
+ * POST /api/admin/teachers — Ajouter/Inviter un professeur & lui assigner plusieurs classes/matières
  */
 export async function POST(request: Request) {
   try {
@@ -46,13 +45,39 @@ export async function POST(request: Request) {
     }
 
     const school_id = user.user_metadata?.school_id
-    const formData = await request.formData()
-    const email = formData.get('email') as string
-    const full_name = formData.get('full_name') as string
-    const class_id = formData.get('class_id') as string
-    const subject = formData.get('subject') as string
+    const contentType = request.headers.get('content-type') || ''
+    let isFormData = false
+    let email = ''
+    let full_name = ''
+    let subject = ''
+    let class_ids: string[] = []
+
+    if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
+      isFormData = true
+      const formData = await request.formData()
+      email = (formData.get('email') as string) || ''
+      full_name = (formData.get('full_name') as string) || ''
+      subject = (formData.get('subject') as string) || ''
+      
+      const rawClassIds = formData.getAll('class_ids')
+      if (rawClassIds.length > 0) {
+        class_ids = rawClassIds.map(c => c as string).filter(Boolean)
+      } else {
+        const singleClass = formData.get('class_id') as string
+        if (singleClass) class_ids = [singleClass]
+      }
+    } else {
+      const body = await request.json()
+      email = body.email || ''
+      full_name = body.full_name || ''
+      subject = body.subject || ''
+      class_ids = body.class_ids || (body.class_id ? [body.class_id] : [])
+    }
 
     if (!email || !full_name) {
+      if (isFormData) {
+        return NextResponse.redirect(new URL('/admin/enseignants?error=missing_fields', request.url), 303)
+      }
       return NextResponse.json({ error: 'Nom et email sont requis.' }, { status: 400 })
     }
 
@@ -80,6 +105,9 @@ export async function POST(request: Request) {
       })
 
       if (authError || !authUser?.user) {
+        if (isFormData) {
+          return NextResponse.redirect(new URL('/admin/enseignants?error=auth_failed', request.url), 303)
+        }
         return NextResponse.json({ error: authError?.message || 'Erreur création enseignant.' }, { status: 500 })
       }
 
@@ -94,17 +122,25 @@ export async function POST(request: Request) {
       })
     }
 
-    // 2. Assigner la classe et la matière si renseignées
-    if (class_id && subject) {
-      await supabase.from('teacher_classes').upsert({
+    // 2. Assigner les classes et la matière si renseignées
+    if (class_ids.length > 0 && subject) {
+      const teacherClassesToInsert = class_ids.map(cId => ({
         school_id,
         teacher_user_id: teacherUserId,
-        class_id,
+        class_id: cId,
         subject,
-      }, { onConflict: 'teacher_user_id,class_id,subject' })
+      }))
+
+      await supabase.from('teacher_classes').upsert(teacherClassesToInsert, {
+        onConflict: 'teacher_user_id,class_id,subject',
+      })
     }
 
-    return NextResponse.redirect(new URL('/admin/enseignants', request.url))
+    if (isFormData) {
+      return NextResponse.redirect(new URL('/admin/enseignants?success=1', request.url), 303)
+    }
+
+    return NextResponse.json({ data: { success: true, teacherUserId }, error: null })
   } catch (error) {
     console.error('Erreur ajout enseignant:', error)
     return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
