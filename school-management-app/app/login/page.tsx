@@ -108,11 +108,8 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <p className="text-center text-blue-300 text-sm mt-6">
-        Vous êtes une école ?{' '}
-        <Link href="/signup" className="text-blue-400 hover:text-white font-medium transition">
-          Créer un espace
-        </Link>
+      <p className="text-center text-blue-200/80 text-xs mt-6">
+        🔒 Les comptes (Professeurs, Parents, Élèves) sont gérés et créés par l'administration de l'établissement.
       </p>
     </div>
   )
