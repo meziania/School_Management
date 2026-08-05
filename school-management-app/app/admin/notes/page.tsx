@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { formatDate, gradeColor, calculateAverage } from '@/lib/utils'
 import { Subject, getSubjectsForLevel, MOROCCAN_SUBJECTS_CATALOG } from '@/lib/constants/subjects'
+import Pagination from '@/components/ui/Pagination'
 
 interface ClassItem {
   id: string
@@ -77,6 +78,11 @@ export default function NotesAdminPage() {
 
   const [bulkGrades, setBulkGrades] = useState<Record<string, { score: string; coefficient: string; comment: string }>>({})
   const [isSavingBulk, setIsSavingBulk] = useState(false)
+
+  // Data Grid Pagination & Live Search State
+  const [gridSearch, setGridSearch] = useState('')
+  const [gridPage, setGridPage] = useState(1)
+  const [gridItemsPerPage, setGridItemsPerPage] = useState(10)
 
   // 1. Initial Load of Classes and Students
   useEffect(() => {
@@ -138,6 +144,21 @@ export default function NotesAdminPage() {
     if (!selectedClassId) return []
     return allStudents.filter(s => s.class_id === selectedClassId)
   }, [selectedClassId, allStudents])
+
+  const filteredGridStudents = useMemo(() => {
+    if (!gridSearch.trim()) return classStudents
+    const q = gridSearch.toLowerCase()
+    return classStudents.filter(s =>
+      `${s.first_name} ${s.last_name}`.toLowerCase().includes(q) ||
+      `${s.last_name} ${s.first_name}`.toLowerCase().includes(q)
+    )
+  }, [classStudents, gridSearch])
+
+  const totalGridPages = Math.ceil(filteredGridStudents.length / gridItemsPerPage) || 1
+  const paginatedGridStudents = useMemo(() => {
+    const start = (gridPage - 1) * gridItemsPerPage
+    return filteredGridStudents.slice(start, start + gridItemsPerPage)
+  }, [filteredGridStudents, gridPage, gridItemsPerPage])
 
   // Reset student and subject choices when class changes
   useEffect(() => {
@@ -735,79 +756,111 @@ export default function NotesAdminPage() {
                 </button>
               </div>
 
+              {/* Quick Search inside Data Grid */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between gap-4">
+                <div className="relative w-full sm:w-72">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={gridSearch}
+                    onChange={e => {
+                      setGridSearch(e.target.value)
+                      setGridPage(1)
+                    }}
+                    placeholder="Filtrer la liste d'élèves..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+                  {filteredGridStudents.length} élève(s) dans la classe
+                </span>
+              </div>
+
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                {classStudents.length === 0 ? (
+                {paginatedGridStudents.length === 0 ? (
                   <div className="text-center py-12 text-slate-500 text-sm">
-                    Aucun élève inscrit dans cette classe.
+                    Aucun élève trouvé.
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">#</th>
-                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Élève</th>
-                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-36">Note sur 20 *</th>
-                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">Coeff.</th>
-                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Appréciation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {classStudents.map((st, idx) => {
-                        const rowVal = bulkGrades[st.id] || { score: '', coefficient: '1', comment: '' }
-                        return (
-                          <tr key={st.id} className="hover:bg-slate-50/70 transition">
-                            <td className="px-5 py-3 text-slate-400 font-mono text-xs">{idx + 1}</td>
-                            <td className="px-5 py-3 font-bold text-slate-900">
-                              {st.last_name} {st.first_name}
-                            </td>
-                            <td className="px-5 py-3">
-                              <input
-                                id={`score-input-${st.id}`}
-                                type="number"
-                                step="0.25"
-                                min="0"
-                                max="20"
-                                placeholder="/20"
-                                value={rowVal.score}
-                                onChange={e => setBulkGrades({
-                                  ...bulkGrades,
-                                  [st.id]: { ...rowVal, score: e.target.value },
-                                })}
-                                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                              />
-                            </td>
-                            <td className="px-5 py-3">
-                              <input
-                                id={`coeff-input-${st.id}`}
-                                type="number"
-                                min="0.5"
-                                step="0.5"
-                                value={rowVal.coefficient}
-                                onChange={e => setBulkGrades({
-                                  ...bulkGrades,
-                                  [st.id]: { ...rowVal, coefficient: e.target.value },
-                                })}
-                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                              />
-                            </td>
-                            <td className="px-5 py-3">
-                              <input
-                                id={`comment-input-${st.id}`}
-                                type="text"
-                                placeholder="ex: Bon travail"
-                                value={rowVal.comment}
-                                onChange={e => setBulkGrades({
-                                  ...bulkGrades,
-                                  [st.id]: { ...rowVal, comment: e.target.value },
-                                })}
-                                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                              />
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  <>
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">#</th>
+                          <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Élève</th>
+                          <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-36">Note sur 20 *</th>
+                          <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">Coeff.</th>
+                          <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Appréciation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-sm">
+                        {paginatedGridStudents.map((st, idx) => {
+                          const globalIdx = (gridPage - 1) * gridItemsPerPage + idx + 1
+                          const rowVal = bulkGrades[st.id] || { score: '', coefficient: '1', comment: '' }
+                          return (
+                            <tr key={st.id} className="hover:bg-slate-50/70 transition">
+                              <td className="px-5 py-3 text-slate-400 font-mono text-xs">{globalIdx}</td>
+                              <td className="px-5 py-3 font-bold text-slate-900">
+                                {st.last_name} {st.first_name}
+                              </td>
+                              <td className="px-5 py-3">
+                                <input
+                                  id={`score-input-${st.id}`}
+                                  type="number"
+                                  step="0.25"
+                                  min="0"
+                                  max="20"
+                                  placeholder="/20"
+                                  value={rowVal.score}
+                                  onChange={e => setBulkGrades({
+                                    ...bulkGrades,
+                                    [st.id]: { ...rowVal, score: e.target.value },
+                                  })}
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                />
+                              </td>
+                              <td className="px-5 py-3">
+                                <input
+                                  id={`coeff-input-${st.id}`}
+                                  type="number"
+                                  min="0.5"
+                                  step="0.5"
+                                  value={rowVal.coefficient}
+                                  onChange={e => setBulkGrades({
+                                    ...bulkGrades,
+                                    [st.id]: { ...rowVal, coefficient: e.target.value },
+                                  })}
+                                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                />
+                              </td>
+                              <td className="px-5 py-3">
+                                <input
+                                  id={`comment-input-${st.id}`}
+                                  type="text"
+                                  placeholder="ex: Bon travail"
+                                  value={rowVal.comment}
+                                  onChange={e => setBulkGrades({
+                                    ...bulkGrades,
+                                    [st.id]: { ...rowVal, comment: e.target.value },
+                                  })}
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+
+                    <Pagination
+                      currentPage={gridPage}
+                      totalPages={totalGridPages}
+                      totalItems={filteredGridStudents.length}
+                      itemsPerPage={gridItemsPerPage}
+                      onPageChange={setGridPage}
+                      onItemsPerPageChange={setGridItemsPerPage}
+                    />
+                  </>
                 )}
               </div>
             </form>
