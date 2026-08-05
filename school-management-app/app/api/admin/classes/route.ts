@@ -32,6 +32,38 @@ export async function POST(request: Request) {
   } catch { return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 }) }
 }
 
+export async function PUT(request: Request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || user.user_metadata?.role !== 'school_admin') {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    }
+    const body = await request.json()
+    const { id, name, level, filiere } = body
+
+    if (!id || !name?.trim() || !level) {
+      return NextResponse.json({ error: 'ID, nom de la classe et niveau requis.' }, { status: 400 })
+    }
+
+    const isHighSchool = ['TCS', '1BAC', '2BAC'].includes(level)
+
+    const { data, error } = await supabase
+      .from('classes')
+      .update({
+        name: name.trim(),
+        level,
+        filiere: isHighSchool ? filiere : null,
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ data, error: null })
+  } catch { return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 }) }
+}
+
 export async function DELETE(request: Request) {
   try {
     const supabase = await createClient()
