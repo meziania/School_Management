@@ -61,6 +61,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  if (pathname.startsWith('/teacher/') && role !== 'teacher' && role !== 'super_admin') {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
   if (pathname.startsWith('/super-admin') && role !== 'super_admin') {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -68,6 +72,7 @@ export async function updateSession(request: NextRequest) {
   // Redirection depuis la racine
   if (pathname === '/') {
     if (role === 'school_admin') return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    if (role === 'teacher') return NextResponse.redirect(new URL('/teacher/dashboard', request.url))
     if (role === 'parent') return NextResponse.redirect(new URL('/parent/dashboard', request.url))
     if (role === 'super_admin') return NextResponse.redirect(new URL('/super-admin', request.url))
   }

@@ -1,7 +1,7 @@
 // Types TypeScript — alignés sur le schéma de la base de données
 // Tables en anglais, labels UI en français
 
-export type UserRole = 'super_admin' | 'school_admin' | 'parent'
+export type UserRole = 'super_admin' | 'school_admin' | 'teacher' | 'parent'
 export type SchoolPlan = 'trial' | 'starter' | 'standard' | 'enterprise'
 export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled'
 export type AttendanceStatus = 'present' | 'absent' | 'late'

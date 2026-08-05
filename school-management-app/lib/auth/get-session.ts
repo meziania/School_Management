@@ -56,6 +56,16 @@ export async function requireParent(): Promise<UserProfile> {
 }
 
 /**
+ * Vérifie que l'utilisateur est un enseignant (teacher)
+ * Redirige si non autorisé
+ */
+export async function requireTeacher(): Promise<UserProfile> {
+  const profile = await getUserProfile()
+  if (profile.role !== 'teacher') redirect('/login')
+  return profile
+}
+
+/**
  * Vérifie que l'utilisateur est un super_admin
  * Redirige si non autorisé
  */
