@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface ClassItem {
@@ -13,6 +13,7 @@ interface PresenceFilterBarProps {
   classes: ClassItem[]
   selectedClassId: string
   selectedDate: string
+  selectedPeriod?: string
   baseRoute?: string // '/admin/presence' or '/teacher/presence'
 }
 
@@ -20,11 +21,12 @@ export default function PresenceFilterBar({
   classes,
   selectedClassId,
   selectedDate,
+  selectedPeriod = '',
   baseRoute = '/admin/presence',
 }: PresenceFilterBarProps) {
   const router = useRouter()
 
-  // Find level of initial selected class
+  // Find initial selected class
   const initialClassObj = useMemo(() => {
     return classes.find(c => c.id === selectedClassId) || classes[0]
   }, [classes, selectedClassId])
@@ -42,13 +44,38 @@ export default function PresenceFilterBar({
   const [currentClassId, setCurrentClassId] = useState<string>(selectedClassId || initialClassObj?.id || '')
   const [currentDate, setCurrentDate] = useState<string>(selectedDate)
 
+  // Determine if selected level is Primary (1AP - 6AP)
+  const isPrimaryLevel = useMemo(() => {
+    if (!selectedLevel) return false
+    const lvl = selectedLevel.toUpperCase()
+    return lvl.includes('AP') || lvl.includes('PRIMAIRE') || lvl.includes('CP') || lvl.includes('CE') || lvl.includes('CM')
+  }, [selectedLevel])
+
+  // Dynamic period options based on primary vs secondary
+  const periodOptions = useMemo(() => {
+    if (isPrimaryLevel) {
+      return [
+        { id: 'matin', label: 'Matin (08h30 - 12h00)' },
+        { id: 'apres_midi', label: 'Après-midi (14h30 - 17h30)' },
+      ]
+    }
+    return [
+      { id: 's1', label: 'Séance 1 (08h00 - 10h00)' },
+      { id: 's2', label: 'Séance 2 (10h00 - 12h00)' },
+      { id: 's3', label: 'Séance 3 (14h00 - 16h00)' },
+      { id: 's4', label: 'Séance 4 (16h00 - 18h00)' },
+    ]
+  }, [isPrimaryLevel])
+
+  const [currentPeriod, setCurrentPeriod] = useState<string>(selectedPeriod || periodOptions[0]?.id || '')
+
   // Classes filtered by selected level
   const filteredClasses = useMemo(() => {
     if (!selectedLevel) return classes
     return classes.filter(c => c.level === selectedLevel)
   }, [classes, selectedLevel])
 
-  // Handle level selection change -> update available classes and pre-select first class
+  // Handle level selection change -> update available classes and pre-select first class & period
   const handleLevelChange = (newLevel: string) => {
     setSelectedLevel(newLevel)
     const matchingClasses = classes.filter(c => c.level === newLevel)
@@ -62,16 +89,16 @@ export default function PresenceFilterBar({
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault()
     if (!currentClassId) return
-    router.push(`${baseRoute}?class_id=${currentClassId}&date=${currentDate}`)
+    router.push(`${baseRoute}?class_id=${currentClassId}&date=${currentDate}&period=${encodeURIComponent(currentPeriod)}`)
   }
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-      <form onSubmit={handleApply} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
+      <form onSubmit={handleApply} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
         {/* 1. NIVEAU PÉDAGOGIQUE */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            1. Niveau Pédagogique *
+            1. Niveau *
           </label>
           <select
             id="filter-level-select"
@@ -121,7 +148,7 @@ export default function PresenceFilterBar({
         {/* 3. DATE DE L'APPEL */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            3. Date de l'appel *
+            3. Date *
           </label>
           <input
             id="filter-date-input"
@@ -132,13 +159,32 @@ export default function PresenceFilterBar({
           />
         </div>
 
-        {/* Bouton Afficher */}
+        {/* 4. PÉRIODE / SÉANCE (Dépendante Primaire vs Collège/Lycée) */}
+        <div>
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            4. Période / Séance *
+          </label>
+          <select
+            id="filter-period-select"
+            value={currentPeriod}
+            onChange={e => setCurrentPeriod(e.target.value)}
+            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          >
+            {periodOptions.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Bouton Afficher la classe */}
         <div>
           <button
             id="btn-apply-presence-filter"
             type="submit"
             disabled={!currentClassId}
-            className="w-full py-2.5 px-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition shadow-md flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition shadow-md flex items-center justify-center gap-2"
           >
             Afficher la classe
           </button>

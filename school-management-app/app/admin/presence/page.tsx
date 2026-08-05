@@ -9,13 +9,14 @@ export const metadata: Metadata = { title: 'Présence — EcoleConnect' }
 export default async function PresencePage({
   searchParams,
 }: {
-  searchParams: Promise<{ class_id?: string; date?: string }>
+  searchParams: Promise<{ class_id?: string; date?: string; period?: string }>
 }) {
   await requireAdmin()
   const supabase = await createClient()
   const params = await searchParams
   const today = new Date().toISOString().split('T')[0]
   const selectedDate = params.date || today
+  const selectedPeriod = params.period || ''
 
   const { data: classes } = await supabase
     .from('classes')
@@ -51,11 +52,12 @@ export default async function PresencePage({
         <p className="text-slate-500 text-sm mt-0.5">Saisie et suivi de l'assiduité des élèves par classe</p>
       </div>
 
-      {/* 🌟 Barre de Filtres en Cascade (1. Niveau -> 2. Classe -> 3. Date) */}
+      {/* 🌟 Barre de Filtres en Cascade (1. Niveau -> 2. Classe -> 3. Date -> 4. Période) */}
       <PresenceFilterBar
         classes={classes ?? []}
         selectedClassId={selectedClass!}
         selectedDate={selectedDate}
+        selectedPeriod={selectedPeriod}
         baseRoute="/admin/presence"
       />
 
@@ -68,6 +70,7 @@ export default async function PresencePage({
         <AdminAttendanceGrid
           selectedClassId={selectedClass!}
           selectedDate={selectedDate}
+          selectedPeriod={selectedPeriod}
           className={classNameDisplay}
           students={students}
           existingAttendance={attendance}

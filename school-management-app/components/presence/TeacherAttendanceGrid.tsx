@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
+import { Search, CheckCircle2, UserCheck, UserX, Paperclip } from 'lucide-react'
 import Pagination from '@/components/ui/Pagination'
 
 interface StudentItem {
@@ -12,7 +12,7 @@ interface StudentItem {
 
 interface AttendanceRecord {
   student_id: string
-  status: 'present' | 'absent' | 'late'
+  status: 'present' | 'absent'
 }
 
 interface TeacherAttendanceGridProps {
@@ -38,18 +38,28 @@ export default function TeacherAttendanceGrid({
     const map: Record<string, string> = {}
     students.forEach(s => {
       const rec = existingAttendance.find(a => a.student_id === s.id)
-      map[s.id] = rec?.status || 'present'
+      map[s.id] = rec?.status === 'absent' ? 'absent' : 'present'
     })
     return map
   }, [students, existingAttendance])
 
   const [statusMap, setStatusMap] = useState<Record<string, string>>(initialMap)
+  const [motifs, setMotifs] = useState<Record<string, string>>({})
+
+  // Quick Bulk Actions (Select All / Tout Marquer)
+  const markAllAs = (status: 'present' | 'absent') => {
+    const updated = { ...statusMap }
+    filteredStudents.forEach(s => {
+      updated[s.id] = status
+    })
+    setStatusMap(updated)
+  }
 
   // Live Search & Filter
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const fullName = `${s.last_name} ${s.first_name}`.toLowerCase()
-      const matchesSearch = fullName.includes(searchQuery.toLowerCase())
+      const matchesSearch = fullName.includes(searchQuery.toLowerCase().trim())
       const currentStat = statusMap[s.id] || 'present'
       const matchesStatus = filterStatus === 'all' || currentStat === filterStatus
 
@@ -64,6 +74,9 @@ export default function TeacherAttendanceGrid({
     return filteredStudents.slice(start, start + itemsPerPage)
   }, [filteredStudents, currentPage, itemsPerPage])
 
+  const presentCount = useMemo(() => Object.values(statusMap).filter(v => v === 'present').length, [statusMap])
+  const absentCount = useMemo(() => Object.values(statusMap).filter(v => v === 'absent').length, [statusMap])
+
   return (
     <form action="/api/admin/attendance" method="post" className="space-y-4">
       <input type="hidden" name="class_id" value={selectedClassId} />
@@ -74,29 +87,50 @@ export default function TeacherAttendanceGrid({
         <input key={stId} type="hidden" name={`status_${stId}`} value={stVal} />
       ))}
 
-      {/* Controls: Search & Quick Status Filter */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-72">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => {
-              setSearchQuery(e.target.value)
-              setCurrentPage(1)
-            }}
-            placeholder="Rechercher un élève..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+      {/* Header bar with Tout Marquer & Live Search */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="relative w-full sm:w-72">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
+              placeholder="Rechercher un élève..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Bulk Buttons */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tout marquer :</span>
+            <button
+              type="button"
+              onClick={() => markAllAs('present')}
+              className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition border border-emerald-200 flex items-center gap-1.5"
+            >
+              <UserCheck size={14} /> Tous Présents
+            </button>
+            <button
+              type="button"
+              onClick={() => markAllAs('absent')}
+              className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100 transition border border-red-200 flex items-center gap-1.5"
+            >
+              <UserX size={14} /> Tous Absents
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+        {/* Filter Pills */}
+        <div className="pt-2 border-t border-slate-100 flex items-center gap-2 overflow-x-auto">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Filtre :</span>
           {[
             { id: 'all', label: `Tous (${students.length})` },
-            { id: 'present', label: `Présents (${Object.values(statusMap).filter(v => v === 'present').length})` },
-            { id: 'absent', label: `Absents (${Object.values(statusMap).filter(v => v === 'absent').length})` },
-            { id: 'late', label: `Retards (${Object.values(statusMap).filter(v => v === 'late').length})` },
+            { id: 'present', label: `Présents (${presentCount})` },
+            { id: 'absent', label: `Absents (${absentCount})` },
           ].map(f => (
             <button
               key={f.id}
@@ -131,44 +165,66 @@ export default function TeacherAttendanceGrid({
             {paginatedStudents.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-5 py-8 text-center text-xs text-slate-400">
-                  Aucun élève ne correspond à votre recherche.
+                  Aucun élève trouvé.
                 </td>
               </tr>
             ) : (
               paginatedStudents.map((student, idx) => {
                 const globalIndex = (currentPage - 1) * itemsPerPage + idx + 1
                 const currentStatus = statusMap[student.id] || 'present'
+                const isAbsent = currentStatus === 'absent'
 
                 return (
                   <tr key={student.id} className="hover:bg-slate-50 transition">
-                    <td className="px-5 py-3.5 text-xs font-mono text-slate-400">{globalIndex}</td>
-                    <td className="px-5 py-3.5 font-bold text-slate-900 text-sm">
-                      {student.last_name} {student.first_name}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end sm:justify-start gap-2">
-                        {[
-                          { value: 'present', label: 'Présent', color: 'bg-emerald-600 text-white' },
-                          { value: 'absent', label: 'Absent', color: 'bg-red-600 text-white' },
-                          { value: 'late', label: 'En retard', color: 'bg-amber-500 text-white' },
-                        ].map(opt => {
-                          const isSelected = currentStatus === opt.value
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setStatusMap({ ...statusMap, [student.id]: opt.value })}
-                              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
-                                isSelected
-                                  ? `${opt.color} border-transparent shadow-sm scale-105`
-                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          )
-                        })}
+                    <td colSpan={3} className="p-0">
+                      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono text-slate-400 w-6">{globalIndex}</span>
+                          <span className="font-bold text-slate-900 text-sm">
+                            {student.last_name} {student.first_name}
+                          </span>
+                        </div>
+
+                        {/* Status Buttons: ONLY Présent vs Absent */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setStatusMap({ ...statusMap, [student.id]: 'present' })}
+                            className={`px-4 py-1.5 rounded-xl border text-xs font-bold transition ${
+                              currentStatus === 'present'
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm scale-105'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            Présent
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStatusMap({ ...statusMap, [student.id]: 'absent' })}
+                            className={`px-4 py-1.5 rounded-xl border text-xs font-bold transition ${
+                              currentStatus === 'absent'
+                                ? 'bg-red-600 text-white border-red-600 shadow-sm scale-105'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            Absent
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Optional Note for Absence */}
+                      {isAbsent && (
+                        <div className="px-5 py-2.5 bg-red-50/40 border-t border-red-100/70">
+                          <input
+                            type="text"
+                            name={`motif_${student.id}`}
+                            value={motifs[student.id] || ''}
+                            onChange={e => setMotifs({ ...motifs, [student.id]: e.target.value })}
+                            placeholder="Motif ou remarque d'absence..."
+                            className="w-full px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                          />
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
