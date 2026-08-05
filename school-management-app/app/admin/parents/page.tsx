@@ -38,7 +38,7 @@ export default async function ParentsAdminPage({
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        {/* Formulaire d'invitation parent avec Multi-select Combobox & Phone input */}
+        {/* Formulaire d'invitation parent */}
         <InviteParentForm
           students={(students as any[]) ?? []}
           defaultStudentId={params.student_id || ''}
@@ -75,7 +75,7 @@ export default async function ParentsAdminPage({
                         )}
                       </div>
 
-                      {/* 🌟 Associated Children List Badges with Names & Classes */}
+                      {/* Associated Children List Badges */}
                       <div className="pt-1.5 flex items-center gap-1.5 flex-wrap">
                         <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                           <GraduationCap size={13} className="text-purple-600" />
@@ -97,8 +97,9 @@ export default async function ParentsAdminPage({
                     </div>
                   </div>
 
+                  {/* 🌟 Contacter link pointing to contactId query param */}
                   <Link
-                    href={`/admin/messagerie?with=${p.id}`}
+                    href={`/admin/messagerie?contactId=${p.id}`}
                     className="text-xs text-blue-600 font-bold hover:underline flex-shrink-0 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100 hover:bg-blue-100 transition"
                   >
                     Contacter →
