@@ -64,10 +64,10 @@ export function attendanceStatusClasses(status: 'present' | 'absent' | 'late'): 
 }
 
 /**
- * Label trimestre
+ * Label semestre
  */
-export function termLabel(term: 1 | 2 | 3): string {
-  return `Trimestre ${term}`
+export function termLabel(term: 1 | 2 | 3 | number): string {
+  return `Semestre ${term}`
 }
 
 /**

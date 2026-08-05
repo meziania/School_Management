@@ -99,7 +99,7 @@ export default async function DetailElevePage({
                 <div key={g.id} className="flex items-center justify-between py-2.5">
                   <div>
                     <p className="font-medium text-slate-800 text-sm">{g.subject}</p>
-                    <p className="text-slate-400 text-xs">{formatDate(g.date)} · Trimestre {g.term}</p>
+                    <p className="text-slate-400 text-xs">{formatDate(g.date)} · Semestre {g.term}</p>
                   </div>
                   <span className={`text-base font-bold ${gradeColor(g.score)}`}>{g.score}/20</span>
                 </div>

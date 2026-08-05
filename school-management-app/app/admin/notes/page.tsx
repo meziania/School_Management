@@ -88,17 +88,16 @@ export default async function NotesAdminPage({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Trimestre</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Semestre</label>
             <select
               id="select-term"
               name="term"
               defaultValue={params.term}
               className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Tous</option>
-              <option value="1">Trimestre 1</option>
-              <option value="2">Trimestre 2</option>
-              <option value="3">Trimestre 3</option>
+              <option value="">Tous les semestres</option>
+              <option value="1">Semestre 1</option>
+              <option value="2">Semestre 2</option>
             </select>
           </div>
           <button type="submit"
@@ -135,7 +134,7 @@ export default async function NotesAdminPage({
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Matière</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Note</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Coeff.</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Trimestre</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Semestre</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Date</th>
                   </tr>
                 </thead>

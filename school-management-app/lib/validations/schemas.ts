@@ -82,7 +82,7 @@ export const gradeSchema = z.object({
   subject: z.string().min(1, 'La matière est requise').max(100),
   score: z.number().min(0, 'Note minimum 0').max(20, 'Note maximum 20'),
   coefficient: z.number().min(0.1, 'Coefficient minimum 0.1').max(10),
-  term: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  term: z.number().min(1).max(3),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   comment: z.string().max(500).optional(),
 })

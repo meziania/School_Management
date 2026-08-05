@@ -60,9 +60,9 @@ export default async function ParentNotesPage({
         </div>
       )}
 
-      {/* Filtre trimestre */}
+      {/* Filtre semestre */}
       <div className="flex gap-2">
-        {[{ v: '', l: 'Tous les trimestres' }, { v: '1', l: 'Trimestre 1' }, { v: '2', l: 'Trimestre 2' }, { v: '3', l: 'Trimestre 3' }].map(({ v, l }) => (
+        {[{ v: '', l: 'Tous les semestres' }, { v: '1', l: 'Semestre 1' }, { v: '2', l: 'Semestre 2' }].map(({ v, l }) => (
           <Link key={v}
             href={`/parent/notes?student_id=${activeChild?.id ?? ''}&term=${v}`}
             className={`px-3 py-2 rounded-xl text-sm font-medium border transition ${
@@ -100,7 +100,7 @@ export default async function ParentNotesPage({
                     <p className="text-slate-400 text-xs">coeff. ×{grade.coefficient}</p>
                   </div>
                   <span className="px-2 py-1 rounded-lg bg-slate-50 text-slate-600 text-xs border border-slate-100">
-                    T{grade.term}
+                    S{grade.term}
                   </span>
                 </div>
               ))}
