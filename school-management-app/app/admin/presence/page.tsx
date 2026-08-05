@@ -2,6 +2,7 @@ import { requireAdmin } from '@/lib/auth/get-session'
 import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
 import AdminAttendanceGrid from '@/components/presence/AdminAttendanceGrid'
+import PresenceFilterBar from '@/components/presence/PresenceFilterBar'
 
 export const metadata: Metadata = { title: 'Présence — EcoleConnect' }
 
@@ -50,48 +51,18 @@ export default async function PresencePage({
         <p className="text-slate-500 text-sm mt-0.5">Saisie et suivi de l'assiduité des élèves par classe</p>
       </div>
 
-      {/* Selecteur de classe & date */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-        <form method="get" className="flex gap-4 flex-wrap items-end">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">1. Classe & Niveau</label>
-            <select
-              id="select-class"
-              name="class_id"
-              defaultValue={selectedClass}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {classes?.map(cls => (
-                <option key={cls.id} value={cls.id}>
-                  {cls.name} {cls.level ? `[${cls.level}]` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">2. Date de l'appel</label>
-            <input
-              id="date-picker"
-              type="date"
-              name="date"
-              defaultValue={selectedDate}
-              max={today}
-              className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <button type="submit"
-            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-500 transition shadow-sm">
-            Afficher
-          </button>
-        </form>
-      </div>
+      {/* 🌟 Barre de Filtres en Cascade (1. Niveau -> 2. Classe -> 3. Date) */}
+      <PresenceFilterBar
+        classes={classes ?? []}
+        selectedClassId={selectedClass!}
+        selectedDate={selectedDate}
+        baseRoute="/admin/presence"
+      />
 
       {/* Grille Interactive avec Recherche Live, Tout Marquer (Select All) & Pagination */}
       {students.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2">
-          <p className="text-slate-500 text-sm">Sélectionnez une classe pour afficher la grille d'appel des élèves.</p>
+          <p className="text-slate-500 text-sm">Sélectionnez un niveau puis une classe pour afficher la grille d'appel des élèves.</p>
         </div>
       ) : (
         <AdminAttendanceGrid
