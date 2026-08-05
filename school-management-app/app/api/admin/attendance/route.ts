@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
     if (!class_id || !date || records.length === 0) {
       if (isFormData) {
-        return NextResponse.redirect(new URL(`/admin/presence?class_id=${class_id}&date=${date}`, request.url))
+        return NextResponse.redirect(new URL(`/admin/presence?class_id=${class_id}&date=${date}`, request.url), 303)
       }
       return NextResponse.json({ error: 'Données invalides.' }, { status: 400 })
     }
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error('Erreur attendance upsert:', error)
       if (isFormData) {
-        return NextResponse.redirect(new URL(`/admin/presence?class_id=${class_id}&date=${date}&error=1`, request.url))
+        return NextResponse.redirect(new URL(`/admin/presence?class_id=${class_id}&date=${date}&error=1`, request.url), 303)
       }
       return NextResponse.json({ error: 'Erreur lors de l\'enregistrement.' }, { status: 500 })
     }
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     if (isFormData) {
       const isTeacher = user.user_metadata?.role === 'teacher'
       const redirectPath = isTeacher ? '/teacher/presence' : '/admin/presence'
-      return NextResponse.redirect(new URL(`${redirectPath}?class_id=${class_id}&date=${date}&period=${encodeURIComponent(period)}&success=1`, request.url))
+      return NextResponse.redirect(new URL(`${redirectPath}?class_id=${class_id}&date=${date}&period=${encodeURIComponent(period)}&success=1`, request.url), 303)
     }
 
     return NextResponse.json({ data: { success: true }, error: null })
