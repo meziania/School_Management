@@ -35,7 +35,6 @@ export async function POST(request: Request) {
     const body = await request.json()
 
     const deduction_unjustified = parseFloat(body.deduction_unjustified ?? 0.5)
-    const deduction_justified = parseFloat(body.deduction_justified ?? 0.0)
 
     const { data, error } = await supabase
       .from('school_settings')
@@ -43,7 +42,7 @@ export async function POST(request: Request) {
         {
           school_id: profile.school_id,
           deduction_unjustified,
-          deduction_justified,
+          deduction_justified: 0.0,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'school_id' }

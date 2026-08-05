@@ -6,7 +6,6 @@ import Link from 'next/link'
 
 export default function AssiduiteSettingsPage() {
   const [deductionUnjustified, setDeductionUnjustified] = useState<number>(0.5)
-  const [deductionJustified, setDeductionJustified] = useState<number>(0.0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -19,7 +18,6 @@ export default function AssiduiteSettingsPage() {
         const json = await res.json()
         if (json.data) {
           setDeductionUnjustified(json.data.deduction_unjustified ?? 0.5)
-          setDeductionJustified(json.data.deduction_justified ?? 0.0)
         }
       } catch (err) {
         console.error('Erreur chargement paramètres:', err)
@@ -42,7 +40,6 @@ export default function AssiduiteSettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           deduction_unjustified: deductionUnjustified,
-          deduction_justified: deductionJustified,
         }),
       })
 
@@ -61,14 +58,11 @@ export default function AssiduiteSettingsPage() {
 
   // Simulation calculation
   const sampleUnjustifiedCount = 2
-  const sampleJustifiedCount = 1
-  const calculatedGrade = Math.max(
-    0,
-    20 - sampleUnjustifiedCount * deductionUnjustified - sampleJustifiedCount * deductionJustified
-  ).toFixed(1)
+  const totalDeduction = (sampleUnjustifiedCount * deductionUnjustified).toFixed(1)
+  const calculatedGrade = Math.max(0, 20 - sampleUnjustifiedCount * deductionUnjustified).toFixed(1)
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -104,61 +98,37 @@ export default function AssiduiteSettingsPage() {
               <div>
                 <h2 className="font-bold text-slate-900 text-base">Pondération des Pénalités d'Absence</h2>
                 <p className="text-xs text-slate-500">
-                  Fixez le nombre de points retirés de la note d'Assiduité (base de 20 points) pour chaque absence enregistrée.
+                  Fixez le nombre de points retirés de la note d'Assiduité (base de 20 points) pour chaque absence non justifiée.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Input 1: Absence Non Justifiée */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Déduction pour une absence NON JUSTIFIÉE *
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="5"
-                    value={deductionUnjustified}
-                    onChange={e => setDeductionUnjustified(parseFloat(e.target.value) || 0)}
-                    required
-                    className="w-full pl-4 pr-16 py-3 bg-slate-50 border border-slate-200 rounded-xl text-base font-extrabold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                    points / abs.
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Valeur par défaut recommandée : <strong className="text-slate-700">0.5 pt</strong> par absence sans justificatif.
-                </p>
+            {/* Input: Absence Non Justifiée (Unique field) */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Déduction pour une absence NON JUSTIFIÉE *
+              </label>
+              <div className="relative max-w-md">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={deductionUnjustified}
+                  onChange={e => setDeductionUnjustified(parseFloat(e.target.value) || 0)}
+                  required
+                  className="w-full pl-4 pr-24 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                  points / abs.
+                </span>
               </div>
-
-              {/* Input 2: Absence Justifiée */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Déduction pour une absence JUSTIFIÉE *
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="5"
-                    value={deductionJustified}
-                    onChange={e => setDeductionJustified(parseFloat(e.target.value) || 0)}
-                    required
-                    className="w-full pl-4 pr-16 py-3 bg-slate-50 border border-slate-200 rounded-xl text-base font-extrabold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                    points / abs.
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Valeur par défaut recommandée : <strong className="text-slate-700">0.0 pt</strong> (Absence médicale/justifiée sans pénalité).
-                </p>
-              </div>
+              <p className="text-xs text-slate-500">
+                Valeur par défaut recommandée : <strong className="text-slate-700">0.5 pt</strong> par absence sans justificatif médical.
+                <span className="block text-emerald-600 font-semibold mt-1">
+                  ✓ Remarque : Les absences accompagnées d'un justificatif (ex: certificat médical) ne subissent aucune déduction (0 pt).
+                </span>
+              </p>
             </div>
 
             {/* Live Simulation Card */}
@@ -176,10 +146,10 @@ export default function AssiduiteSettingsPage() {
                 <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
                   <p className="text-xs text-slate-300">Pénalités cumulées</p>
                   <p className="text-lg font-black text-amber-300">
-                    -{(sampleUnjustifiedCount * deductionUnjustified + sampleJustifiedCount * deductionJustified).toFixed(1)} pts
+                    -{totalDeduction} pts
                   </p>
                   <p className="text-[10px] text-slate-400 mt-0.5">
-                    (2 non-justifiées + 1 justifiée)
+                    (pour 2 absences non-justifiées)
                   </p>
                 </div>
                 <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-xl p-3 backdrop-blur-sm">
