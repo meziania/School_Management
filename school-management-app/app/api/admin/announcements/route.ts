@@ -149,14 +149,19 @@ export async function PUT(request: Request) {
         class_id,
         attachment_url: attachment_url || null,
         attachment_name: attachment_name || null,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select('*, classes(name)')
-      .single()
+      .maybeSingle()
 
     if (error) {
       console.error('Erreur PUT announcement:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "L'annonce n'existe plus ou a été supprimée." }, { status: 404 })
     }
 
     return NextResponse.json({ data, error: null })
