@@ -60,8 +60,8 @@ export default function StudentsTable({
 
   return (
     <div className="space-y-4">
-      {/* Header Count & Live Search / Filter bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+      {/* Header Live Search & Class Select Dropdown */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Live Search Input */}
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -77,43 +77,30 @@ export default function StudentsTable({
             autoFocus
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white
                        text-sm font-medium text-slate-900 placeholder:text-slate-400
-                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition shadow-sm"
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition shadow-xs"
           />
         </div>
 
-        {/* Class Filter Badges */}
-        <div className="flex gap-2 flex-wrap items-center">
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedClassId('')
-              setCurrentPage(1)
+        {/* 🌟 Class Filter Dropdown Select (Replaces cluttered pill list) */}
+        <div className="relative min-w-[200px] sm:w-64">
+          <select
+            id="filter-class-select"
+            value={selectedClassId}
+            onChange={e => {
+              setSelectedClassId(e.target.value)
+              setCurrentPage(1) // Reset to first page on class filter change
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
-              !selectedClassId
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white
+                       text-sm font-bold text-slate-800 focus:outline-none focus:ring-2
+                       focus:ring-blue-500 focus:border-transparent shadow-xs transition cursor-pointer"
           >
-            Toutes ({students.length})
-          </button>
-          {classes.map(cls => (
-            <button
-              key={cls.id}
-              type="button"
-              onClick={() => {
-                setSelectedClassId(cls.id)
-                setCurrentPage(1)
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
-                selectedClassId === cls.id
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {cls.name}
-            </button>
-          ))}
+            <option value="">Toutes les classes ({students.length})</option>
+            {classes.map(cls => (
+              <option key={cls.id} value={cls.id}>
+                {cls.name} {cls.level ? `(${cls.level})` : ''}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -121,7 +108,7 @@ export default function StudentsTable({
       {filteredStudents.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2">
           <p className="text-slate-700 font-bold text-base">Aucun élève trouvé</p>
-          <p className="text-slate-400 text-xs">Aucun élève ne correspond à votre recherche "{searchQuery}".</p>
+          <p className="text-slate-400 text-xs">Aucun élève ne correspond à vos critères de recherche.</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
