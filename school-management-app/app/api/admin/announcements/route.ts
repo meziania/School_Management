@@ -86,6 +86,7 @@ export async function POST(request: Request) {
         created_by: user.id,
         title: title.trim(),
         content: content.trim(),
+        target: targets?.[0] || 'all',
         targets,
         class_id,
         attachment_url,
@@ -162,6 +163,7 @@ export async function PUT(request: Request) {
     const updatePayload: any = {
       title: title.trim(),
       content: content.trim(),
+      target: targets?.[0] || 'all',
       targets: targets || ['all'],
       class_id,
       attachment_url: attachment_url || null,
