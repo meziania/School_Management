@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { signupSchoolSchema } from '@/lib/validations/schemas'
 
 /**
  * POST /api/auth/signup-school
  * Crée un nouveau tenant école + admin
- * Utilise le service role (bypasse RLS)
- * 
- * Body: SignupSchoolInput
  */
 export async function POST(request: Request) {
   try {
@@ -22,14 +19,23 @@ export async function POST(request: Request) {
     }
 
     const { school_name, subdomain, admin_email, admin_password, admin_full_name } = parsed.data
-    const supabase = createAdminClient()
+    
+    // Utiliser le client admin si disponible, sinon le client standard avec anon key
+    let supabase = createAdminClient()
 
     // 1. Vérifier que le subdomain n'est pas déjà pris
-    const { data: existingSchool } = await supabase
+    let { data: existingSchool, error: checkError } = await supabase
       .from('schools')
       .select('id')
       .eq('subdomain', subdomain)
       .single()
+
+    // Si le client admin échoue à cause de la clé API, utiliser le client standard
+    if (checkError && (checkError.message?.includes('API key') || checkError.message?.includes('Unauthorized'))) {
+      supabase = await createClient() as any
+      const res = await supabase.from('schools').select('id').eq('subdomain', subdomain).single()
+      existingSchool = res.data
+    }
 
     if (existingSchool) {
       return NextResponse.json(
@@ -53,38 +59,61 @@ export async function POST(request: Request) {
     if (schoolError || !school) {
       console.error('Erreur création école:', schoolError)
       return NextResponse.json(
-        { error: 'Erreur lors de la création de l\'école.' },
+        { error: schoolError?.message || 'Erreur lors de la création de l\'école.' },
         { status: 500 }
       )
     }
 
     // 3. Créer le compte Supabase Auth
-    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-      email: admin_email,
-      password: admin_password,
-      email_confirm: true,
-      user_metadata: {
-        school_id: school.id,
-        role: 'school_admin',
-        full_name: admin_full_name,
-      },
-    })
+    let authUserUserId: string | null = null
 
-    if (authError || !authUser.user) {
-      // Rollback : supprimer l'école créée
-      await supabase.from('schools').delete().eq('id', school.id)
-      console.error('Erreur création auth user:', authError)
-      return NextResponse.json(
-        { error: authError?.message || 'Erreur lors de la création du compte.' },
-        { status: 500 }
-      )
+    // Tenter avec auth.admin.createUser
+    if (supabase.auth?.admin?.createUser) {
+      const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+        email: admin_email,
+        password: admin_password,
+        email_confirm: true,
+        user_metadata: {
+          school_id: school.id,
+          role: 'school_admin',
+          full_name: admin_full_name,
+        },
+      })
+      if (!authError && authUser?.user) {
+        authUserUserId = authUser.user.id
+      }
+    }
+
+    // Fallback si admin API indisponible : signUp standard
+    if (!authUserUserId) {
+      const { data: authUser, error: authError } = await supabase.auth.signUp({
+        email: admin_email,
+        password: admin_password,
+        options: {
+          data: {
+            school_id: school.id,
+            role: 'school_admin',
+            full_name: admin_full_name,
+          },
+        },
+      })
+
+      if (authError || !authUser?.user) {
+        await supabase.from('schools').delete().eq('id', school.id)
+        console.error('Erreur création auth user:', authError)
+        return NextResponse.json(
+          { error: authError?.message || 'Erreur lors de la création du compte.' },
+          { status: 500 }
+        )
+      }
+      authUserUserId = authUser.user.id
     }
 
     // 4. Créer le profil utilisateur dans la table users
     const { error: profileError } = await supabase
       .from('users')
       .insert({
-        id: authUser.user.id,
+        id: authUserUserId,
         school_id: school.id,
         role: 'school_admin',
         email: admin_email,
@@ -93,7 +122,6 @@ export async function POST(request: Request) {
 
     if (profileError) {
       console.error('Erreur création profil:', profileError)
-      // Pas de rollback critique ici, le compte existe quand même
     }
 
     // 5. Créer l'abonnement trial

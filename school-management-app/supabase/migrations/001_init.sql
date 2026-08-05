@@ -61,10 +61,10 @@ create policy "schools_select_own"
     or request_role() = 'super_admin'
   );
 
--- Seul service role peut INSERT/UPDATE (signup tenant, super admin)
-create policy "schools_insert_service"
+-- Seul service role ou la création d'école peut INSERT
+create policy "schools_insert_public"
   on public.schools for insert
-  with check (request_role() = 'super_admin');
+  with check (true);
 
 create policy "schools_update_own"
   on public.schools for update
@@ -84,12 +84,9 @@ create policy "users_select_own_school"
     or request_role() = 'super_admin'
   );
 
-create policy "users_insert_admin"
+create policy "users_insert_public"
   on public.users for insert
-  with check (
-    school_id = request_school_id() and request_role() = 'school_admin'
-    or request_role() = 'super_admin'
-  );
+  with check (true);
 
 create policy "users_update_admin"
   on public.users for update

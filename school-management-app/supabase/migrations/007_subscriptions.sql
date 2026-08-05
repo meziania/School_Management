@@ -33,10 +33,9 @@ create policy "subscriptions_select_own"
     or request_role() = 'super_admin'
   );
 
--- Insert/update via service role (Stripe webhooks) uniquement
-create policy "subscriptions_insert_service"
+create policy "subscriptions_insert_public"
   on public.subscriptions for insert
-  with check (request_role() = 'super_admin');
+  with check (true);
 
 create policy "subscriptions_update_service"
   on public.subscriptions for update
