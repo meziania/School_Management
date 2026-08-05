@@ -52,14 +52,10 @@ create index if not exists idx_users_role on public.users(role);
 -- ── RLS schools ───────────────────────────────────────────────
 alter table public.schools enable row level security;
 
--- Super admin voit tout (via service role côté serveur)
--- School admin voit uniquement son école
-create policy "schools_select_own"
+-- Lecture publique des écoles (nécessaire pour vérifier la disponibilité du sous-domaine et l'inscription)
+create policy "schools_select_public"
   on public.schools for select
-  using (
-    id = request_school_id()
-    or request_role() = 'super_admin'
-  );
+  using (true);
 
 -- Seul service role ou la création d'école peut INSERT
 create policy "schools_insert_public"
