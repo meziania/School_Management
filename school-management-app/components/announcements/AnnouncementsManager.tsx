@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Megaphone, Plus, Edit, Trash2, X, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Megaphone, Plus, Edit, Trash2, X, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 
 interface ClassItem {
@@ -39,6 +39,9 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
   const [editClassId, setEditClassId] = useState('')
+
+  // Delete Confirmation Modal State
+  const [deletingAnn, setDeletingAnn] = useState<AnnouncementItem | null>(null)
 
   // Toast notifications
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -138,10 +141,9 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
     }
   }
 
-  // Delete Announcement
-  const handleDelete = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette annonce ?')) return
-
+  // Confirm Delete Action
+  const confirmDelete = async (id: string) => {
+    setIsSubmitting(true)
     try {
       const res = await fetch(`/api/admin/announcements?id=${id}`, {
         method: 'DELETE',
@@ -154,10 +156,13 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
       }
 
       setAnnouncements(prev => prev.filter(a => a.id !== id))
+      setDeletingAnn(null)
       showToast('Annonce supprimée avec succès !')
       router.refresh()
     } catch {
       showToast('Erreur réseau lors de la suppression.', 'error')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -271,7 +276,7 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleDelete(ann.id)}
+                    onClick={() => setDeletingAnn(ann)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
                     title="Supprimer l'annonce"
                   >
@@ -359,6 +364,43 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 CUSTOM DELETE CONFIRMATION MODAL */}
+      {deletingAnn && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-2xs">
+              <AlertTriangle size={24} />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-slate-900 text-lg">Supprimer l'annonce ?</h3>
+              <p className="text-slate-500 text-xs leading-relaxed">
+                Êtes-vous sûr de vouloir supprimer définitivement l'annonce <span className="font-bold text-slate-800">"{deletingAnn.title}"</span> ? Cette action est irréversible.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingAnn(null)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDelete(deletingAnn.id)}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-md transition flex-1 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                <span>{isSubmitting ? 'Suppression...' : 'Supprimer'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
