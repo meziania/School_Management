@@ -28,7 +28,7 @@ export default function ParentNav({ userName }: { userName?: string }) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-56 min-h-screen bg-white border-r border-slate-200">
+      <aside className="hidden md:flex flex-col w-56 h-screen sticky top-0 bg-white border-r border-slate-200">
         <div className="p-5 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center">

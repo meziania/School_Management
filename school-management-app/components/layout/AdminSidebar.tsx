@@ -32,7 +32,7 @@ export default function AdminSidebar({ schoolName }: { schoolName?: string }) {
   }
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen bg-slate-900 border-r border-slate-800">
+    <aside className="flex flex-col w-64 h-screen sticky top-0 bg-slate-900 border-r border-slate-800">
       {/* Logo & École */}
       <div className="p-6 border-b border-slate-800">
         <div className="flex items-center gap-3">

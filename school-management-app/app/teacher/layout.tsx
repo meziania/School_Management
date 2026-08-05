@@ -30,7 +30,7 @@ export default async function TeacherLayout({
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar Enseignant */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between flex-shrink-0 min-h-screen">
+      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between flex-shrink-0 h-screen sticky top-0">
         <div>
           <div className="p-5 border-b border-slate-800 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md">
