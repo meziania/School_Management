@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { UserPlus, BookOpen, ChevronDown, Check, X, Search, School } from 'lucide-react'
+import { UserPlus, BookOpen, ChevronDown, Check, X, Search, School, Plus } from 'lucide-react'
 
 interface ClassItem {
   id: string
@@ -14,7 +14,7 @@ interface InviteTeacherFormProps {
   classes: ClassItem[]
 }
 
-const MOROCCAN_SUBJECTS = [
+const DEFAULT_MOROCCAN_SUBJECTS = [
   'Mathématiques',
   'Physique-Chimie',
   'SVT (Sciences de la Vie et de la Terre)',
@@ -34,16 +34,39 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
-  const [subject, setSubject] = useState(MOROCCAN_SUBJECTS[0])
+
+  // 🌟 CREATABLE SUBJECTS STATE
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>(DEFAULT_MOROCCAN_SUBJECTS)
+  const [subject, setSubject] = useState(DEFAULT_MOROCCAN_SUBJECTS[0])
+  const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false)
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState('')
+  const subjectDropdownRef = useRef<HTMLDivElement>(null)
+
+  // CLASSES MULTI-SELECT STATE
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([])
-  
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false)
   const [classSearchQuery, setClassSearchQuery] = useState('')
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const classDropdownRef = useRef<HTMLDivElement>(null)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  // Handle Creating a New Custom Subject
+  const handleCreateNewSubject = (newSub: string) => {
+    const trimmed = newSub.trim()
+    if (!trimmed) return
+
+    // Capitalize first letter neatly
+    const formatted = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+
+    if (!availableSubjects.some(s => s.toLowerCase() === formatted.toLowerCase())) {
+      setAvailableSubjects(prev => [...prev, formatted])
+    }
+    setSubject(formatted)
+    setSubjectSearchQuery('')
+    setIsSubjectDropdownOpen(false)
+  }
 
   const toggleClass = (classId: string) => {
     if (selectedClassIds.includes(classId)) {
@@ -93,6 +116,14 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
       setLoading(false)
     }
   }
+
+  const filteredSubjects = availableSubjects.filter(s =>
+    s.toLowerCase().includes(subjectSearchQuery.toLowerCase())
+  )
+
+  const hasExactSubjectMatch = availableSubjects.some(
+    s => s.toLowerCase() === subjectSearchQuery.trim().toLowerCase()
+  )
 
   const filteredClasses = classes.filter(c =>
     c.name.toLowerCase().includes(classSearchQuery.toLowerCase()) ||
@@ -151,28 +182,75 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
           />
         </div>
 
-        {/* 🌟 MATIÈRE ENSEIGNÉE (PREDEFINED SELECT DROPDOWN) */}
-        <div>
+        {/* 🌟 CREATABLE MATIÈRE ENSEIGNÉE COMBOBOX */}
+        <div className="relative" ref={subjectDropdownRef}>
           <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
             <BookOpen size={14} className="text-indigo-600" />
             Matière enseignée *
           </label>
-          <select
-            id="teacher-subject-select"
-            value={subject}
-            onChange={e => setSubject(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+
+          <div
+            onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
+            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white min-h-[44px] flex items-center justify-between cursor-pointer text-sm font-bold text-slate-900 shadow-2xs"
           >
-            {MOROCCAN_SUBJECTS.map(sub => (
-              <option key={sub} value={sub}>
-                {sub}
-              </option>
-            ))}
-          </select>
+            <span>{subject}</span>
+            <ChevronDown size={16} className="text-slate-400 flex-shrink-0" />
+          </div>
+
+          {/* Creatable Dropdown Menu */}
+          {isSubjectDropdownOpen && (
+            <div className="absolute z-40 top-full left-0 right-0 mt-1 bg-white rounded-2xl border border-slate-200 shadow-2xl p-2.5 space-y-2 animate-fadeIn max-h-64 overflow-y-auto">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={subjectSearchQuery}
+                  onChange={e => setSubjectSearchQuery(e.target.value)}
+                  placeholder="Rechercher ou créer une matière..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border rounded-xl text-xs font-bold text-slate-900 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              {/* Option to create a new custom subject if not matched */}
+              {subjectSearchQuery.trim() && !hasExactSubjectMatch && (
+                <div
+                  onClick={() => handleCreateNewSubject(subjectSearchQuery)}
+                  className="p-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-extrabold flex items-center gap-2 cursor-pointer transition border border-indigo-200"
+                >
+                  <Plus size={16} className="text-indigo-600 flex-shrink-0" />
+                  <span>Créer la matière <span className="underline">"{subjectSearchQuery.trim()}"</span></span>
+                </div>
+              )}
+
+              {/* List of existing subjects */}
+              <div className="space-y-1">
+                {filteredSubjects.map(sub => {
+                  const isSelected = subject === sub
+                  return (
+                    <div
+                      key={sub}
+                      onClick={() => {
+                        setSubject(sub)
+                        setIsSubjectDropdownOpen(false)
+                        setSubjectSearchQuery('')
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition ${
+                        isSelected ? 'bg-indigo-600 text-white' : 'hover:bg-slate-50 text-slate-800'
+                      }`}
+                    >
+                      <span>{sub}</span>
+                      {isSelected && <Check size={16} className="text-white" />}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 🌟 CLASSES À AFFECTER (MULTI-SELECT COMBOBOX) */}
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative" ref={classDropdownRef}>
           <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
             <School size={14} className="text-indigo-600" />
             Classes à affecter ({selectedClassIds.length})
