@@ -2,7 +2,8 @@ import { requireAdmin } from '@/lib/auth/get-session'
 import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Users, UserPlus, Mail } from 'lucide-react'
+import { Users, Mail } from 'lucide-react'
+import InviteParentForm from '@/components/InviteParentForm'
 
 export const metadata: Metadata = { title: 'Parents — EcoleConnect' }
 
@@ -31,82 +32,29 @@ export default async function ParentsAdminPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Parents</h1>
-          <p className="text-slate-500 mt-1">Gestion des comptes et liaisons parents-élèves</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Parents</h1>
+          <p className="text-slate-500 mt-1 text-sm">Gestion des comptes et liaisons parents-élèves</p>
         </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        {/* Formulaire d'invitation parent */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 h-fit">
-          <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-            <UserPlus size={18} className="text-purple-600" />
-            Inviter un parent
-          </h2>
-
-          <form action="/api/admin/parents/invite" method="post" className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nom complet du parent *</label>
-              <input
-                id="parent-name-input"
-                name="full_name"
-                required
-                placeholder="ex: Marc Dupont"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Email du parent *</label>
-              <input
-                id="parent-email-input"
-                type="email"
-                name="email"
-                required
-                placeholder="ex: parent@email.fr"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Élève associé *</label>
-              <select
-                id="parent-student-select"
-                name="student_id"
-                defaultValue={params.student_id || ''}
-                required
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="">Sélectionner l'enfant</option>
-                {students?.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.last_name} {s.first_name} — {(s.classes as any)?.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              id="btn-invite-parent"
-              type="submit"
-              className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-xl transition text-sm shadow-sm"
-            >
-              Envoyer l'invitation
-            </button>
-          </form>
-        </div>
+        {/* Formulaire d'invitation parent avec Searchable Select */}
+        <InviteParentForm
+          students={(students as any[]) ?? []}
+          defaultStudentId={params.student_id || ''}
+        />
 
         {/* Liste des parents */}
         <div className="md:col-span-2 space-y-3">
           <h2 className="font-semibold text-slate-800">Parents inscrits ({parents?.length ?? 0})</h2>
 
           {(parents?.length ?? 0) === 0 ? (
-            <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
+            <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 shadow-sm">
               <Users className="text-slate-300 mx-auto mb-2" size={32} />
               <p className="text-slate-500 text-sm">Aucun parent n'a encore été invité.</p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100 shadow-sm">
               {parents?.map(p => (
                 <div key={p.id} className="p-4 flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
