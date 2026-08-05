@@ -66,7 +66,7 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
   // Delete Modal State
   const [deletingAnn, setDeletingAnn] = useState<AnnouncementItem | null>(null)
 
-  // 🌟 PAGINATION STATE
+  // PAGINATION STATE
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 4
   const totalPages = Math.ceil(announcements.length / pageSize) || 1
@@ -235,6 +235,10 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
       const json = await res.json()
       if (!res.ok || json.error) {
         showToast(json.error || 'Erreur lors de la modification.', 'error')
+        if (res.status === 404) {
+          setAnnouncements(prev => prev.filter(a => a.id !== editingAnn.id))
+          setEditingAnn(null)
+        }
         return
       }
 
@@ -313,7 +317,7 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
         </div>
       )}
 
-      {/* 🌟 TWO-COLUMN GRID LAYOUT (FORM ON LEFT, PAGINATED LIST ON RIGHT) */}
+      {/* TWO-COLUMN GRID LAYOUT (FORM ON LEFT, PAGINATED LIST ON RIGHT) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* LEFT COLUMN: FORMULAIRE NOUVELLE ANNONCE (7 COLS ON DESKTOP) */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
@@ -568,7 +572,7 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
           </form>
         </div>
 
-        {/* 🌟 RIGHT COLUMN: ANNONCES PUBLIÉES + PAGINATION (5 COLS ON DESKTOP) */}
+        {/* RIGHT COLUMN: ANNONCES PUBLIÉES + PAGINATION (5 COLS ON DESKTOP) */}
         <div className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
             <h2 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
@@ -657,7 +661,7 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
             </div>
           )}
 
-          {/* 🌟 PAGINATION CONTROLS */}
+          {/* PAGINATION CONTROLS */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
               <button
