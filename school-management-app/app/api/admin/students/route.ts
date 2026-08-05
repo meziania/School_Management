@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     }
     const { searchParams } = new URL(request.url)
     const class_id = searchParams.get('class_id')
-    let query = supabase.from('students').select('*, classes(name)').eq('is_active', true).order('last_name')
+    let query = supabase.from('students').select('*, classes(name, level, filiere)').eq('is_active', true).order('last_name')
     if (class_id) query = query.eq('class_id', class_id)
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
