@@ -7,11 +7,18 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('*, classes(name)')
-      .order('created_at', { ascending: false })
+    let school_id = user.user_metadata?.school_id
+    if (!school_id) {
+      const { data: dbUser } = await supabase.from('users').select('school_id').eq('id', user.id).maybeSingle()
+      school_id = dbUser?.school_id
+    }
 
+    let query = supabase.from('announcements').select('*, classes(name)').order('created_at', { ascending: false })
+    if (school_id) {
+      query = query.eq('school_id', school_id)
+    }
+
+    const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ data, error: null })
   } catch {
@@ -24,7 +31,7 @@ export async function POST(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user || user.user_metadata?.role !== 'school_admin') {
+    if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
 
@@ -63,7 +70,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Titre et contenu requis.' }, { status: 400 })
     }
 
-    const school_id = user.user_metadata?.school_id
+    let school_id = user.user_metadata?.school_id
+    if (!school_id) {
+      const { data: dbUser } = await supabase.from('users').select('school_id').eq('id', user.id).maybeSingle()
+      school_id = dbUser?.school_id
+    }
 
     const classTarget = targets.find(t => t.startsWith('class:'))
     const class_id = classTarget ? classTarget.replace('class:', '') : null
@@ -92,22 +103,24 @@ export async function POST(request: Request) {
     }
 
     // Notifications pour les parents
-    const { data: parents } = await supabase
-      .from('users')
-      .select('id')
-      .eq('role', 'parent')
-      .eq('school_id', school_id)
+    if (school_id) {
+      const { data: parents } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'parent')
+        .eq('school_id', school_id)
 
-    if (parents && parents.length > 0) {
-      await supabase.from('notifications').insert(
-        parents.map(parent => ({
-          school_id,
-          user_id: parent.id,
-          type: 'announcement' as const,
-          content: `Nouvelle annonce : ${title.trim()}`,
-          link: '/parent/annonces',
-        }))
-      )
+      if (parents && parents.length > 0) {
+        await supabase.from('notifications').insert(
+          parents.map(parent => ({
+            school_id,
+            user_id: parent.id,
+            type: 'announcement' as const,
+            content: `Nouvelle annonce : ${title.trim()}`,
+            link: '/parent/annonces',
+          }))
+        )
+      }
     }
 
     if (isFormData) {
@@ -126,7 +139,7 @@ export async function PUT(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user || user.user_metadata?.role !== 'school_admin') {
+    if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
 
@@ -137,20 +150,32 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'ID, titre et contenu requis.' }, { status: 400 })
     }
 
+    let school_id = user.user_metadata?.school_id
+    if (!school_id) {
+      const { data: dbUser } = await supabase.from('users').select('school_id').eq('id', user.id).maybeSingle()
+      school_id = dbUser?.school_id
+    }
+
     const classTarget = targets?.find((t: string) => t.startsWith('class:'))
     const class_id = classTarget ? classTarget.replace('class:', '') : null
 
+    const updatePayload: any = {
+      title: title.trim(),
+      content: content.trim(),
+      targets: targets || ['all'],
+      class_id,
+      attachment_url: attachment_url || null,
+      attachment_name: attachment_name || null,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (school_id) {
+      updatePayload.school_id = school_id
+    }
+
     const { data, error } = await supabase
       .from('announcements')
-      .update({
-        title: title.trim(),
-        content: content.trim(),
-        targets: targets || ['all'],
-        class_id,
-        attachment_url: attachment_url || null,
-        attachment_name: attachment_name || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select('*, classes(name)')
       .maybeSingle()
@@ -161,7 +186,7 @@ export async function PUT(request: Request) {
     }
 
     if (!data) {
-      return NextResponse.json({ error: "L'annonce n'existe plus ou a été supprimée." }, { status: 404 })
+      return NextResponse.json({ error: "L'annonce n'existe plus ou vous n'avez pas les droits pour la modifier." }, { status: 404 })
     }
 
     return NextResponse.json({ data, error: null })
@@ -176,7 +201,7 @@ export async function DELETE(request: Request) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user || user.user_metadata?.role !== 'school_admin') {
+    if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
 
