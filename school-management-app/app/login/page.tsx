@@ -42,6 +42,8 @@ export default function LoginPage() {
     const role = data.user?.user_metadata?.role
     if (role === 'school_admin') {
       router.push('/admin/dashboard')
+    } else if (role === 'teacher') {
+      router.push('/teacher/dashboard')
     } else if (role === 'parent') {
       router.push('/parent/dashboard')
     } else if (role === 'super_admin') {
