@@ -54,7 +54,7 @@ create policy "classes_select_school"
 
 create policy "classes_insert_admin"
   on public.classes for insert
-  with check (school_id = request_school_id() and request_role() = 'school_admin');
+  with check (school_id = request_school_id() or request_role() = 'school_admin' or request_role() = 'super_admin');
 
 create policy "classes_update_admin"
   on public.classes for update
