@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, School, Award } from 'lucide-react'
+import { ArrowLeft, BookOpen, School, Sparkles } from 'lucide-react'
+import { MoroccanFiliere } from '@/types/app'
 
 const MOROCCAN_LEVEL_OPTIONS = [
   { group: 'Cycle Primaire', items: [
@@ -26,12 +27,52 @@ const MOROCCAN_LEVEL_OPTIONS = [
   ]},
 ]
 
+const FILIERE_OPTIONS_FOR_TRONC_COMMUN: MoroccanFiliere[] = [
+  'Tronc Commun Scientifique' as MoroccanFiliere,
+  'Tronc Commun Lettres et Sciences Humaines' as MoroccanFiliere,
+]
+
+const FILIERE_OPTIONS_FOR_BAC: MoroccanFiliere[] = [
+  'Sciences Mathématiques A' as MoroccanFiliere,
+  'Sciences Mathématiques B' as MoroccanFiliere,
+  'Sciences Physiques' as MoroccanFiliere,
+  'SVT (Sciences de la Vie et de la Terre)' as MoroccanFiliere,
+  'Sciences Économiques et Gestion' as MoroccanFiliere,
+  'Sciences et Technologies Électriques' as MoroccanFiliere,
+  'Sciences et Technologies Mécaniques' as MoroccanFiliere,
+  'Lettres et Sciences Humaines' as MoroccanFiliere,
+]
+
 export default function NouvelleClassePage() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [level, setLevel] = useState('2BAC')
+  const [filiere, setFiliere] = useState<string>('Sciences Mathématiques A')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Determine if the selected level is in the High School cycle (Lycée)
+  const isHighSchoolCycle = useMemo(() => {
+    return ['TCS', '1BAC', '2BAC'].includes(level)
+  }, [level])
+
+  // Get available filières based on High School level
+  const availableFilieres = useMemo(() => {
+    if (level === 'TCS') return FILIERE_OPTIONS_FOR_TRONC_COMMUN
+    if (level === '1BAC' || level === '2BAC') return FILIERE_OPTIONS_FOR_BAC
+    return []
+  }, [level])
+
+  // Update filiere when level changes
+  const handleLevelChange = (newLevel: string) => {
+    setLevel(newLevel)
+    if (['TCS', '1BAC', '2BAC'].includes(newLevel)) {
+      if (newLevel === 'TCS') setFiliere(FILIERE_OPTIONS_FOR_TRONC_COMMUN[0])
+      else setFiliere(FILIERE_OPTIONS_FOR_BAC[0])
+    } else {
+      setFiliere('') // Reset if not High School
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -43,6 +84,10 @@ export default function NouvelleClassePage() {
       setError('Le niveau pédagogique est obligatoire.')
       return
     }
+    if (isHighSchoolCycle && !filiere) {
+      setError('Veuillez choisir une filière pour ce niveau du lycée.')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -51,7 +96,11 @@ export default function NouvelleClassePage() {
       const res = await fetch('/api/admin/classes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), level }),
+        body: JSON.stringify({
+          name: name.trim(),
+          level,
+          filiere: isHighSchoolCycle ? filiere : null,
+        }),
       })
       const json = await res.json()
 
@@ -76,12 +125,13 @@ export default function NouvelleClassePage() {
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Nouvelle classe</h1>
-          <p className="text-slate-500 text-sm">Définir une classe et son niveau du système marocain</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Nouvelle classe</h1>
+          <p className="text-slate-500 text-sm">Définir une classe, son niveau et sa filière officielle</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+        {/* Nom de la classe */}
         <div>
           <label className="block text-sm font-bold text-slate-800 mb-1.5">Nom de la classe *</label>
           <input
@@ -95,15 +145,16 @@ export default function NouvelleClassePage() {
           />
         </div>
 
+        {/* Niveau Pédagogique */}
         <div>
           <label className="block text-sm font-bold text-slate-800 mb-1.5 flex items-center justify-between">
             <span>Niveau Pédagogique *</span>
-            <span className="text-xs text-blue-600 font-normal">Détermine les examens applicables</span>
+            <span className="text-xs text-blue-600 font-normal">Détermine le cycle & examens</span>
           </label>
           <select
             id="class-level-select"
             value={level}
-            onChange={e => setLevel(e.target.value)}
+            onChange={e => handleLevelChange(e.target.value)}
             required
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
@@ -117,13 +168,36 @@ export default function NouvelleClassePage() {
               </optgroup>
             ))}
           </select>
-          <p className="text-slate-400 text-xs mt-1.5">
-            💡 Les classes de certification (6AP, 3AC, 1BAC, 2BAC) débloquent les vues d'examens normalisés et nationaux.
-          </p>
         </div>
 
+        {/* 🌟 CONDITIONAL FIELD: Filière / Branche (Required only for Lycée levels: TCS, 1BAC, 2BAC) */}
+        {isHighSchoolCycle && (
+          <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200/80 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+            <label className="block text-sm font-bold text-blue-900 flex items-center gap-1.5">
+              <BookOpen size={16} className="text-blue-600" />
+              Filière / Branche du Lycée *
+            </label>
+            <select
+              id="class-filiere-select"
+              value={filiere}
+              onChange={e => setFiliere(e.target.value)}
+              required={isHighSchoolCycle}
+              className="w-full px-4 py-2.5 rounded-xl border border-blue-200 text-sm font-bold bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {availableFilieres.map(f => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-blue-700">
+              💡 La filière choisie adapte automatiquement le catalogue des matières et les coefficients officiels du Baccalauréat.
+            </p>
+          </div>
+        )}
+
         {error && (
-          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">
             {error}
           </div>
         )}

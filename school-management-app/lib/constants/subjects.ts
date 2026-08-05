@@ -4,6 +4,7 @@ export interface Subject {
   code: string
   defaultCoefficient: number
   applicableLevels: string[] // Ex: ['6AP', '1AC', '2AC', '3AC', '1BAC', '2BAC'] ou ['ALL']
+  applicableFilieres?: string[] // Ex: ['Sciences Mathématiques A', 'Sciences Physiques', ...] ou ['ALL']
 }
 
 export const MOROCCAN_SUBJECTS_CATALOG: Subject[] = [
@@ -33,14 +34,47 @@ export const MOROCCAN_SUBJECTS_CATALOG: Subject[] = [
 ]
 
 /**
- * Filtre la liste des matières applicables à un niveau donné (ex: '1BAC', '6AP')
+ * Filtre les matières applicables à un niveau et une filière (ex: '2BAC' + 'Sciences Mathématiques A')
  */
-export function getSubjectsForLevel(level?: string): Subject[] {
+export function getSubjectsForLevel(level?: string, filiere?: string | null): Subject[] {
   if (!level) return MOROCCAN_SUBJECTS_CATALOG
   const lvlUpper = level.toUpperCase()
 
-  return MOROCCAN_SUBJECTS_CATALOG.filter(s =>
+  let subjects = MOROCCAN_SUBJECTS_CATALOG.filter(s =>
     s.applicableLevels.includes('ALL') ||
     s.applicableLevels.some(l => lvlUpper.includes(l))
   )
+
+  // Ajustement dynamique des coefficients selon la filière si spécifiée
+  if (filiere) {
+    subjects = subjects.map(s => {
+      let customCoeff = s.defaultCoefficient
+
+      if (filiere.includes('Sciences Math')) {
+        if (s.id === 'maths') customCoeff = 7
+        if (s.id === 'pc') customCoeff = 5
+        if (s.id === 'svt') customCoeff = 3
+      } else if (filiere.includes('Physiques')) {
+        if (s.id === 'pc') customCoeff = 7
+        if (s.id === 'maths') customCoeff = 7
+        if (s.id === 'svt') customCoeff = 5
+      } else if (filiere.includes('SVT')) {
+        if (s.id === 'svt') customCoeff = 7
+        if (s.id === 'pc') customCoeff = 5
+        if (s.id === 'maths') customCoeff = 5
+      } else if (filiere.includes('Lettres')) {
+        if (s.id === 'arabe') customCoeff = 4
+        if (s.id === 'philo') customCoeff = 4
+        if (s.id === 'hist_geo') customCoeff = 4
+        if (s.id === 'maths') customCoeff = 2
+      }
+
+      return {
+        ...s,
+        defaultCoefficient: customCoeff,
+      }
+    })
+  }
+
+  return subjects
 }

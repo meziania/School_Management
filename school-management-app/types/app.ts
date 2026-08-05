@@ -55,11 +55,24 @@ export interface UserProfile {
   updated_at: string
 }
 
+export type MoroccanFiliere =
+  | 'Sciences Mathématiques A'
+  | 'Sciences Mathématiques B'
+  | 'Sciences Physiques'
+  | 'SVT (Sciences de la Vie et de la Terre)'
+  | 'Sciences Économiques et Gestion'
+  | 'Sciences et Technologies Électriques'
+  | 'Sciences et Technologies Mécaniques'
+  | 'Lettres et Sciences Humaines'
+  | 'Tronc Commun Scientifique'
+  | 'Tronc Commun Lettres et Sciences Humaines'
+
 export interface Class {
   id: string
   school_id: string
   name: string
   level: string | null
+  filiere?: MoroccanFiliere | string | null
   is_active: boolean
   created_at: string
   updated_at: string
