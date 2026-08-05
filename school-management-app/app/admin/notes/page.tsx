@@ -323,16 +323,26 @@ export default function NotesAdminPage() {
           <p className="text-slate-500 text-sm mt-0.5">Saisie continue et examens de certification du système marocain</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Primary CTA: Ajouter une note */}
+          <Link
+            id="btn-add-grade-header"
+            href={selectedStudentId ? `/admin/notes/ajouter?student_id=${selectedStudentId}` : '/admin/notes/ajouter'}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm rounded-xl transition shadow-md hover:shadow-lg flex-shrink-0"
+          >
+            <Plus size={18} />
+            Ajouter une note
+          </Link>
+
           <Link
             href="/simulator"
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition"
           >
             <Calculator size={15} /> Simulateur What-If
           </Link>
           <Link
             href="/admin/settings/exams"
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition"
           >
             <Award size={15} /> Config Examens
           </Link>
