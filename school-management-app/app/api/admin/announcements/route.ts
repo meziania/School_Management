@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { announcementSchema } from '@/lib/validations/schemas'
 
 export async function GET() {
   try {
@@ -20,19 +19,55 @@ export async function POST(request: Request) {
     if (!user || user.user_metadata?.role !== 'school_admin') {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
-    const body = await request.json()
-    const parsed = announcementSchema.safeParse(body)
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
+
+    const contentType = request.headers.get('content-type') || ''
+    let title = ''
+    let content = ''
+    let class_id: string | null = null
+    let isFormData = false
+
+    if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
+      isFormData = true
+      const formData = await request.formData()
+      title = (formData.get('title') as string) || ''
+      content = (formData.get('content') as string) || ''
+      const rawClassId = formData.get('class_id') as string
+      class_id = rawClassId && rawClassId.trim() ? rawClassId.trim() : null
+    } else {
+      const body = await request.json()
+      title = body.title || ''
+      content = body.content || ''
+      class_id = body.class_id || null
+    }
+
+    if (!title.trim() || !content.trim()) {
+      if (isFormData) {
+        return NextResponse.redirect(new URL('/admin/annonces?error=invalid', request.url), 303)
+      }
+      return NextResponse.json({ error: 'Titre et contenu requis.' }, { status: 400 })
+    }
 
     const school_id = user.user_metadata?.school_id
 
     const { data: announcement, error } = await supabase
       .from('announcements')
-      .insert({ ...parsed.data, school_id, created_by: user.id })
+      .insert({
+        school_id,
+        created_by: user.id,
+        title: title.trim(),
+        content: content.trim(),
+        class_id,
+      })
       .select()
       .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      console.error('Erreur insertion annonce:', error)
+      if (isFormData) {
+        return NextResponse.redirect(new URL('/admin/annonces?error=1', request.url), 303)
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     // Créer des notifications pour les parents concernés
     let parentsQuery = supabase.from('users').select('id').eq('role', 'parent').eq('school_id', school_id)
@@ -44,12 +79,19 @@ export async function POST(request: Request) {
           school_id,
           user_id: parent.id,
           type: 'announcement' as const,
-          content: `Nouvelle annonce : ${parsed.data.title}`,
+          content: `Nouvelle annonce : ${title.trim()}`,
           link: '/parent/annonces',
         }))
       )
     }
 
+    if (isFormData) {
+      return NextResponse.redirect(new URL('/admin/annonces?success=1', request.url), 303)
+    }
+
     return NextResponse.json({ data: announcement, error: null })
-  } catch { return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 }) }
+  } catch (error) {
+    console.error('Erreur API announcements:', error)
+    return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
+  }
 }
