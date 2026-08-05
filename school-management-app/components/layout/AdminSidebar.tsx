@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Users, GraduationCap, ClipboardList,
-  BarChart3, Megaphone, MessageSquare, BookOpen, LogOut
+  BarChart3, Megaphone, MessageSquare, BookOpen, LogOut, UserCheck
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/admin/classes', label: 'Classes', icon: BookOpen },
   { href: '/admin/eleves', label: 'Élèves', icon: GraduationCap },
   { href: '/admin/parents', label: 'Parents', icon: Users },
+  { href: '/admin/enseignants', label: 'Enseignants', icon: UserCheck },
   { href: '/admin/presence', label: 'Présence', icon: ClipboardList },
   { href: '/admin/notes', label: 'Notes', icon: BarChart3 },
   { href: '/admin/annonces', label: 'Annonces', icon: Megaphone },
