@@ -27,7 +27,7 @@ export type LoginInput = z.infer<typeof loginSchema>
 
 export const classSchema = z.object({
   name: z.string().min(1, 'Le nom est requis').max(100),
-  level: z.string().max(50).optional(),
+  level: z.string().min(1, 'Le niveau est requis').max(50),
 })
 
 export type ClassInput = z.infer<typeof classSchema>

@@ -10,13 +10,12 @@ import {
   Check,
   ChevronDown,
   RefreshCw,
-  Sparkles,
   Save,
   Trash2,
-  BookOpen,
-  Calendar,
   AlertCircle,
   CheckCircle2,
+  Award,
+  Calculator,
 } from 'lucide-react'
 import { formatDate, gradeColor, calculateAverage } from '@/lib/utils'
 
@@ -41,42 +40,36 @@ interface GradeItem {
   coefficient: number
   term: number
   date: string
+  exam_type?: string
   comment?: string
   students?: { first_name: string; last_name: string }
 }
 
 export default function NotesAdminPage() {
-  // ── Mode Toggle: 'individual' (Mode Individuel) vs 'class' (Mode Classe / Saisie en Masse)
   const [mode, setMode] = useState<'individual' | 'class'>('individual')
 
-  // ── Master Data
   const [classes, setClasses] = useState<ClassItem[]>([])
   const [allStudents, setAllStudents] = useState<StudentItem[]>([])
   const [dataLoading, setDataLoading] = useState(true)
 
-  // ── Filter States
   const [selectedClassId, setSelectedClassId] = useState<string>('')
   const [selectedStudentId, setSelectedStudentId] = useState<string>('')
-  const [selectedSemester, setSelectedSemester] = useState<string>('1') // '1', '2', or ''
+  const [selectedSemester, setSelectedSemester] = useState<string>('1')
   const [selectedSubject, setSelectedSubject] = useState<string>('Mathématiques')
+  const [selectedExamType, setSelectedExamType] = useState<string>('controle_continu')
 
-  // ── Searchable Select State for Student
   const [studentSearch, setStudentSearch] = useState('')
   const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // ── Grades State
   const [grades, setGrades] = useState<GradeItem[]>([])
   const [isFetchingGrades, setIsFetchingGrades] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // ── Bulk Entry State (Class Mode Data Grid)
-  // Map of studentId -> { score: string, coefficient: string, comment: string }
   const [bulkGrades, setBulkGrades] = useState<Record<string, { score: string; coefficient: string; comment: string }>>({})
   const [isSavingBulk, setIsSavingBulk] = useState(false)
 
-  // ── Initial Fetch: Load Classes and Students
   useEffect(() => {
     async function loadInitialData() {
       setDataLoading(true)
@@ -85,7 +78,6 @@ export default function NotesAdminPage() {
           fetch('/api/admin/classes').then(r => r.json()),
           fetch('/api/admin/students').then(r => r.json()),
         ])
-
         if (resClasses.data) setClasses(resClasses.data)
         if (resStudents.data) setAllStudents(resStudents.data)
       } catch (err) {
@@ -97,19 +89,39 @@ export default function NotesAdminPage() {
     loadInitialData()
   }, [])
 
-  // ── Filtered Students based on selected Class
+  const selectedClassObj = useMemo(() => {
+    return classes.find(c => c.id === selectedClassId)
+  }, [classes, selectedClassId])
+
+  const selectedClassLevel = selectedClassObj?.level || ''
+
+  // Examens disponibles selon le Niveau du système marocain
+  const availableExamTypes = useMemo(() => {
+    const list = [{ id: 'controle_continu', label: 'Contrôle Continu' }]
+    if (selectedClassLevel === '6AP') {
+      list.push({ id: 'examen_normalise_provincial', label: 'Examen Normalisé Provincial' })
+    } else if (selectedClassLevel === '3AC') {
+      list.push({ id: 'examen_normalise_regional', label: 'Examen Normalisé Régional' })
+    } else if (selectedClassLevel === '1BAC') {
+      list.push({ id: 'examen_regional', label: 'Examen Régional' })
+    } else if (selectedClassLevel === '2BAC') {
+      list.push({ id: 'examen_regional', label: 'Examen Régional' })
+      list.push({ id: 'examen_national', label: 'Examen National' })
+    }
+    return list
+  }, [selectedClassLevel])
+
   const classStudents = useMemo(() => {
     if (!selectedClassId) return []
     return allStudents.filter(s => s.class_id === selectedClassId)
   }, [selectedClassId, allStudents])
 
-  // Reset student selection when class changes
   useEffect(() => {
     setSelectedStudentId('')
     setStudentSearch('')
+    setSelectedExamType('controle_continu')
   }, [selectedClassId])
 
-  // ── Searchable Select Options for Student
   const filteredStudentOptions = useMemo(() => {
     if (!studentSearch.trim()) return classStudents
     const query = studentSearch.toLowerCase()
@@ -119,7 +131,6 @@ export default function NotesAdminPage() {
     )
   }, [classStudents, studentSearch])
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -130,24 +141,21 @@ export default function NotesAdminPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // ── Selected Student Object
   const selectedStudentObj = useMemo(() => {
     return allStudents.find(s => s.id === selectedStudentId)
   }, [allStudents, selectedStudentId])
 
-  // ── Auto-Fetch Logic for Individual Mode
   useEffect(() => {
     if (mode === 'individual' && selectedStudentId) {
       fetchGradesForIndividual(selectedStudentId, selectedSemester)
     }
   }, [mode, selectedStudentId, selectedSemester])
 
-  // ── Auto-Fetch & Initialize for Class Mode
   useEffect(() => {
     if (mode === 'class' && selectedClassId) {
-      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester)
+      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester, selectedExamType)
     }
-  }, [mode, selectedClassId, selectedSubject, selectedSemester, classStudents])
+  }, [mode, selectedClassId, selectedSubject, selectedSemester, selectedExamType, classStudents])
 
   async function fetchGradesForIndividual(studentId: string, semester: string) {
     setIsFetchingGrades(true)
@@ -164,7 +172,7 @@ export default function NotesAdminPage() {
     }
   }
 
-  async function fetchGradesForClassMode(classId: string, subject: string, semester: string) {
+  async function fetchGradesForClassMode(classId: string, subject: string, semester: string, examType: string) {
     setIsFetchingGrades(true)
     try {
       let url = `/api/admin/grades?class_id=${classId}`
@@ -174,10 +182,9 @@ export default function NotesAdminPage() {
       const json = await res.json()
       const existingGrades: GradeItem[] = json.data ?? []
 
-      // Initialize Data Grid inputs with existing values or empty strings
       const initialBulkState: Record<string, { score: string; coefficient: string; comment: string }> = {}
       classStudents.forEach(st => {
-        const gradeObj = existingGrades.find(g => g.student_id === st.id)
+        const gradeObj = existingGrades.find(g => g.student_id === st.id && (g.exam_type || 'controle_continu') === examType)
         initialBulkState[st.id] = {
           score: gradeObj ? String(gradeObj.score) : '',
           coefficient: gradeObj ? String(gradeObj.coefficient) : '1',
@@ -193,16 +200,14 @@ export default function NotesAdminPage() {
     }
   }
 
-  // ── Manual Refresh Handler
   function handleManualRefresh() {
     if (mode === 'individual' && selectedStudentId) {
       fetchGradesForIndividual(selectedStudentId, selectedSemester)
     } else if (mode === 'class' && selectedClassId) {
-      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester)
+      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester, selectedExamType)
     }
   }
 
-  // ── Submit Class Mode Bulk Grades
   async function handleSaveBulkGrades(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedClassId) {
@@ -218,6 +223,7 @@ export default function NotesAdminPage() {
         score: parseFloat(val.score),
         coefficient: parseFloat(val.coefficient) || 1,
         term: parseInt(selectedSemester || '1'),
+        exam_type: selectedExamType,
         date: new Date().toISOString().split('T')[0],
         comment: val.comment || undefined,
       }))
@@ -245,16 +251,15 @@ export default function NotesAdminPage() {
       }
 
       setSaveSuccess(`Succès ! ${entriesToSave.length} note(s) enregistrée(s) avec succès.`)
-      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester)
+      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester, selectedExamType)
       setTimeout(() => setSaveSuccess(null), 4000)
     } catch {
-      setSaveError('Erreur réseau lors de l\'enregistrement.')
+      setSaveError('Erreur réseau.')
     } finally {
       setIsSavingBulk(false)
     }
   }
 
-  // ── Delete single grade handler
   async function handleDeleteGrade(gradeId: string) {
     if (!confirm('Voulez-vous vraiment supprimer cette note ?')) return
     try {
@@ -271,65 +276,76 @@ export default function NotesAdminPage() {
 
   return (
     <div className="space-y-6">
-      {/* En-tête avec titre et Switcher Mode */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gestion des Notes</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Saisie rapide, consultation et évaluations des élèves</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gestion des Notes & Examens</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Saisie continue et examens de certification du système marocain</p>
         </div>
 
-        {/* Toggle Switch Mode (Individuel vs Classe) */}
-        <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200 shadow-inner self-start sm:self-auto">
-          <button
-            onClick={() => setMode('individual')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-              mode === 'individual'
-                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/simulator"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition"
           >
-            <User size={16} />
-            Mode Individuel
-          </button>
-          <button
-            onClick={() => setMode('class')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-              mode === 'class'
-                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            <Calculator size={15} /> Simulateur What-If
+          </Link>
+          <Link
+            href="/admin/exam-config"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition"
           >
-            <Users size={16} />
-            Mode Classe (En Masse)
-          </button>
+            <Award size={15} /> Config Examens
+          </Link>
+
+          <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200 shadow-inner">
+            <button
+              onClick={() => setMode('individual')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                mode === 'individual'
+                  ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <User size={15} /> Mode Individuel
+            </button>
+            <button
+              onClick={() => setMode('class')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                mode === 'class'
+                  ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Users size={15} /> Mode Classe (En Masse)
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Bar des Filtres en Cascades */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          {/* 1. Class Dropdown */}
+          {/* 1. Classe */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              1. Classe
+              1. Classe & Niveau
             </label>
             <select
               id="filter-class-select"
               value={selectedClassId}
               onChange={e => setSelectedClassId(e.target.value)}
               disabled={dataLoading}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 transition"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
             >
               <option value="">Sélectionner une classe</option>
               {classes.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} {c.level ? `(${c.level})` : ''}
+                  {c.name} {c.level ? `[${c.level}]` : ''}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* MODE INDIVIDUEL : Searchable Student Select */}
+          {/* 2. Élève ou Matière */}
           {mode === 'individual' ? (
             <div className="relative" ref={dropdownRef}>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -347,7 +363,7 @@ export default function NotesAdminPage() {
               >
                 <span className="truncate">
                   {!selectedClassId
-                    ? '⚠️ Choisissez d\'abord une classe'
+                    ? 'Choisissez d\'abord une classe'
                     : selectedStudentObj
                     ? `${selectedStudentObj.last_name} ${selectedStudentObj.first_name}`
                     : 'Sélectionner un élève...'}
@@ -355,7 +371,6 @@ export default function NotesAdminPage() {
                 <ChevronDown size={16} className="text-slate-400 flex-shrink-0" />
               </div>
 
-              {/* Autocomplete Dropdown List */}
               {isStudentDropdownOpen && selectedClassId && (
                 <div className="absolute z-30 top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
@@ -397,7 +412,6 @@ export default function NotesAdminPage() {
               )}
             </div>
           ) : (
-            /* MODE CLASSE : Subject Select */
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 2. Matière
@@ -407,13 +421,13 @@ export default function NotesAdminPage() {
                 type="text"
                 value={selectedSubject}
                 onChange={e => setSelectedSubject(e.target.value)}
-                placeholder="ex: Mathématiques, Français, SVT"
+                placeholder="ex: Mathématiques, Arabe, Physique"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           )}
 
-          {/* 3. Semester Select */}
+          {/* 3. Semestre */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
               3. Semestre
@@ -430,7 +444,7 @@ export default function NotesAdminPage() {
             </select>
           </div>
 
-          {/* Action / Refresh Button */}
+          {/* Refresh / Add Button */}
           <div className="flex gap-2">
             <button
               onClick={handleManualRefresh}
@@ -446,17 +460,34 @@ export default function NotesAdminPage() {
                 href={`/admin/notes/ajouter?student_id=${selectedStudentId}`}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition shadow-sm flex-shrink-0"
               >
-                <Plus size={16} />
-                Saisir
+                <Plus size={16} /> Saisir
               </Link>
             )}
           </div>
         </div>
+
+        {/* 🌟 ON-THE-FLY EXAM TYPE SELECTION FOR CERTIFICATION YEARS */}
+        {selectedClassId && availableExamTypes.length > 1 && mode === 'class' && (
+          <div className="pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap animate-in fade-in">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-2">Type d'examen :</span>
+            {availableExamTypes.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setSelectedExamType(t.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition border ${
+                  selectedExamType === t.id
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* MODE INDIVIDUEL CONTENT                                      */}
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* MODE INDIVIDUEL */}
       {mode === 'individual' && (
         <div className="space-y-4">
           {!selectedStudentId ? (
@@ -466,12 +497,11 @@ export default function NotesAdminPage() {
               </div>
               <h3 className="font-bold text-slate-800">Aucun élève sélectionné</h3>
               <p className="text-slate-500 text-sm max-w-sm mx-auto">
-                Veuillez d'abord choisir une classe, puis utiliser la recherche d'élève ci-dessus pour consulter ses notes.
+                Choisissez une classe, puis utilisez la recherche d'élève ci-dessus.
               </p>
             </div>
           ) : (
             <>
-              {/* Carte Résumé Élève + Moyenne */}
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
@@ -482,12 +512,11 @@ export default function NotesAdminPage() {
                       {selectedStudentObj?.last_name} {selectedStudentObj?.first_name}
                     </h2>
                     <p className="text-slate-500 text-xs mt-0.5">
-                      {classes.find(c => c.id === selectedClassId)?.name} · {selectedSemester ? `Semestre ${selectedSemester}` : 'Toutes périodes'}
+                      {selectedClassObj?.name} {selectedClassLevel ? `[${selectedClassLevel}]` : ''} · {selectedSemester ? `Semestre ${selectedSemester}` : 'Toutes périodes'}
                     </p>
                   </div>
                 </div>
 
-                {/* Calcul Moyenne Générale */}
                 <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200/80">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Moyenne générale :</span>
                   <span className={`text-2xl font-extrabold ${gradeColor(calculateAverage(grades) ?? 0)}`}>
@@ -496,16 +525,9 @@ export default function NotesAdminPage() {
                 </div>
               </div>
 
-              {/* Table des Notes */}
               {grades.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2">
-                  <p className="text-slate-500 text-sm">Aucune note enregistrée pour cet élève sur la période sélectionnée.</p>
-                  <Link
-                    href={`/admin/notes/ajouter?student_id=${selectedStudentId}`}
-                    className="inline-flex items-center gap-1.5 text-blue-600 text-sm font-semibold hover:underline"
-                  >
-                    <Plus size={16} /> Ajouter une première note
-                  </Link>
+                  <p className="text-slate-500 text-sm">Aucune note enregistrée pour cet élève.</p>
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -515,7 +537,7 @@ export default function NotesAdminPage() {
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Matière</th>
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Note sur 20</th>
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Coeff.</th>
-                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Semestre</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Type / Semestre</th>
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Date</th>
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                       </tr>
@@ -533,7 +555,7 @@ export default function NotesAdminPage() {
                           <td className="px-5 py-4 text-slate-500 font-medium">×{g.coefficient}</td>
                           <td className="px-5 py-4">
                             <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
-                              S{g.term}
+                              {g.exam_type && g.exam_type !== 'controle_continu' ? g.exam_type.replace(/_/g, ' ') : `S${g.term}`}
                             </span>
                           </td>
                           <td className="px-5 py-4 text-slate-500 text-xs hidden sm:table-cell">{formatDate(g.date)}</td>
@@ -541,7 +563,6 @@ export default function NotesAdminPage() {
                             <button
                               onClick={() => handleDeleteGrade(g.id)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                              title="Supprimer"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -557,9 +578,7 @@ export default function NotesAdminPage() {
         </div>
       )}
 
-      {/* ───────────────────────────────────────────────────────────── */}
-      {/* MODE CLASSE (Saisie en masse Data Grid)                       */}
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* MODE CLASSE DATA GRID */}
       {mode === 'class' && (
         <div className="space-y-4">
           {!selectedClassId ? (
@@ -569,31 +588,29 @@ export default function NotesAdminPage() {
               </div>
               <h3 className="font-bold text-slate-800">Sélectionnez une classe</h3>
               <p className="text-slate-500 text-sm max-w-sm mx-auto">
-                Choisissez une classe dans le filtre ci-dessus pour ouvrir la grille de saisie en masse des notes.
+                Choisissez une classe dans le filtre ci-dessus pour ouvrir la grille de saisie en masse.
               </p>
             </div>
           ) : (
             <form onSubmit={handleSaveBulkGrades} className="space-y-4">
-              {/* Alertes d'état */}
               {saveSuccess && (
-                <div className="p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2 animate-in fade-in">
-                  <CheckCircle2 size={18} className="text-green-600 flex-shrink-0" />
+                <div className="p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2">
+                  <CheckCircle2 size={18} className="text-green-600" />
                   <span>{saveSuccess}</span>
                 </div>
               )}
               {saveError && (
-                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2 animate-in fade-in">
+                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2">
                   <AlertCircle size={18} className="text-red-600 flex-shrink-0" />
                   <span>{saveError}</span>
                 </div>
               )}
 
-              {/* Data Grid Header info */}
               <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-bold">Grille de saisie par classe : {classes.find(c => c.id === selectedClassId)?.name}</h2>
+                  <h2 className="text-lg font-bold">Grille de Saisie en Masse : {selectedClassObj?.name}</h2>
                   <p className="text-blue-200 text-xs mt-0.5">
-                    Matière : <span className="font-semibold text-white">{selectedSubject}</span> · {selectedSemester ? `Semestre ${selectedSemester}` : 'Semestre 1'} · Remplissez et utilisez <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px]">Tab</kbd> pour naviguer rapide.
+                    Matière : <span className="font-semibold text-white">{selectedSubject}</span> · {selectedSemester ? `Semestre ${selectedSemester}` : 'Semestre 1'} · Examen : <span className="font-bold text-amber-300">{selectedExamType.replace(/_/g, ' ')}</span>
                   </p>
                 </div>
 
@@ -604,11 +621,10 @@ export default function NotesAdminPage() {
                   className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition text-sm flex-shrink-0"
                 >
                   <Save size={18} />
-                  {isSavingBulk ? 'Enregistrement...' : 'Enregistrer toute la classe'}
+                  {isSavingBulk ? 'Enregistrement...' : 'Enregistrer la classe'}
                 </button>
               </div>
 
-              {/* Data Grid Table */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                 {classStudents.length === 0 ? (
                   <div className="text-center py-12 text-slate-500 text-sm">
@@ -622,7 +638,7 @@ export default function NotesAdminPage() {
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Élève</th>
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-36">Note sur 20 *</th>
                         <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">Coeff.</th>
-                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Appréciation / Commentaire</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Appréciation</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
@@ -668,7 +684,7 @@ export default function NotesAdminPage() {
                               <input
                                 id={`comment-input-${st.id}`}
                                 type="text"
-                                placeholder="ex: Bon travail, participer davantage"
+                                placeholder="ex: Bon travail"
                                 value={rowVal.comment}
                                 onChange={e => setBulkGrades({
                                   ...bulkGrades,

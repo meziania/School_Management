@@ -7,6 +7,31 @@ export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled'
 export type AttendanceStatus = 'present' | 'absent' | 'late'
 export type NotificationType = 'announcement' | 'absence' | 'grade' | 'message' | 'justification_submitted'
 
+export type MoroccanLevel =
+  | '1AP' | '2AP' | '3AP' | '4AP' | '5AP' | '6AP'
+  | '1AC' | '2AC' | '3AC'
+  | 'TCS' | '1BAC' | '2BAC'
+
+export type ExamType =
+  | 'controle_continu'
+  | 'examen_normalise_provincial'
+  | 'examen_normalise_regional'
+  | 'examen_regional'
+  | 'examen_national'
+
+export interface ExamConfig {
+  id?: string
+  school_id?: string
+  level: string
+  cc_weight: number
+  provincial_weight: number
+  regional_weight: number
+  national_weight: number
+  passing_grade: number
+  created_at?: string
+  updated_at?: string
+}
+
 export interface School {
   id: string
   name: string
