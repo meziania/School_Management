@@ -6,16 +6,24 @@ export async function GET() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-    const { data, error } = await supabase.from('announcements').select('*, users(full_name)').order('created_at', { ascending: false })
+
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*, users(full_name), classes(name)')
+      .order('created_at', { ascending: false })
+
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ data, error: null })
-  } catch { return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 }) }
+  } catch {
+    return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
+  }
 }
 
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
+
     if (!user || user.user_metadata?.role !== 'school_admin') {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
@@ -23,7 +31,9 @@ export async function POST(request: Request) {
     const contentType = request.headers.get('content-type') || ''
     let title = ''
     let content = ''
-    let class_id: string | null = null
+    let targets: string[] = ['all']
+    let attachment_url: string | null = null
+    let attachment_name: string | null = null
     let isFormData = false
 
     if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
@@ -31,13 +41,19 @@ export async function POST(request: Request) {
       const formData = await request.formData()
       title = (formData.get('title') as string) || ''
       content = (formData.get('content') as string) || ''
-      const rawClassId = formData.get('class_id') as string
-      class_id = rawClassId && rawClassId.trim() ? rawClassId.trim() : null
+      const rawTargets = formData.get('targets') as string
+      if (rawTargets) {
+        try { targets = JSON.parse(rawTargets) } catch { targets = [rawTargets] }
+      }
+      attachment_url = (formData.get('attachment_url') as string) || null
+      attachment_name = (formData.get('attachment_name') as string) || null
     } else {
       const body = await request.json()
       title = body.title || ''
       content = body.content || ''
-      class_id = body.class_id || null
+      targets = body.targets || ['all']
+      attachment_url = body.attachment_url || null
+      attachment_name = body.attachment_name || null
     }
 
     if (!title.trim() || !content.trim()) {
@@ -49,6 +65,10 @@ export async function POST(request: Request) {
 
     const school_id = user.user_metadata?.school_id
 
+    // Fallback first target class_id if single class targeted
+    const classTarget = targets.find(t => t.startsWith('class:'))
+    const class_id = classTarget ? classTarget.replace('class:', '') : null
+
     const { data: announcement, error } = await supabase
       .from('announcements')
       .insert({
@@ -56,9 +76,12 @@ export async function POST(request: Request) {
         created_by: user.id,
         title: title.trim(),
         content: content.trim(),
+        targets,
         class_id,
+        attachment_url,
+        attachment_name,
       })
-      .select()
+      .select('*, users(full_name), classes(name)')
       .single()
 
     if (error) {
@@ -69,9 +92,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Notifications pour les parents concernés
-    let parentsQuery = supabase.from('users').select('id').eq('role', 'parent').eq('school_id', school_id)
-    const { data: parents } = await parentsQuery
+    // Notifications pour les parents / utilisateurs concernés
+    const { data: parents } = await supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'parent')
+      .eq('school_id', school_id)
 
     if (parents && parents.length > 0) {
       await supabase.from('notifications').insert(
@@ -106,21 +132,27 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { id, title, content, class_id } = body
+    const { id, title, content, targets, attachment_url, attachment_name } = body
 
     if (!id || !title?.trim() || !content?.trim()) {
       return NextResponse.json({ error: 'ID, titre et contenu requis.' }, { status: 400 })
     }
+
+    const classTarget = targets?.find((t: string) => t.startsWith('class:'))
+    const class_id = classTarget ? classTarget.replace('class:', '') : null
 
     const { data, error } = await supabase
       .from('announcements')
       .update({
         title: title.trim(),
         content: content.trim(),
-        class_id: class_id || null,
+        targets: targets || ['all'],
+        class_id,
+        attachment_url: attachment_url || null,
+        attachment_name: attachment_name || null,
       })
       .eq('id', id)
-      .select()
+      .select('*, users(full_name), classes(name)')
       .single()
 
     if (error) {
