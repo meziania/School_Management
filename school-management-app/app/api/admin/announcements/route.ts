@@ -9,7 +9,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('announcements')
-      .select('*, users(full_name), classes(name)')
+      .select('*, classes(name)')
       .order('created_at', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -65,7 +65,6 @@ export async function POST(request: Request) {
 
     const school_id = user.user_metadata?.school_id
 
-    // Fallback first target class_id if single class targeted
     const classTarget = targets.find(t => t.startsWith('class:'))
     const class_id = classTarget ? classTarget.replace('class:', '') : null
 
@@ -81,7 +80,7 @@ export async function POST(request: Request) {
         attachment_url,
         attachment_name,
       })
-      .select('*, users(full_name), classes(name)')
+      .select('*, classes(name)')
       .single()
 
     if (error) {
@@ -92,7 +91,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Notifications pour les parents / utilisateurs concernés
+    // Notifications pour les parents
     const { data: parents } = await supabase
       .from('users')
       .select('id')
@@ -117,7 +116,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ data: announcement, error: null })
   } catch (error) {
-    console.error('Erreur API announcements:', error)
+    console.error('Erreur API announcements POST:', error)
     return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
   }
 }
@@ -152,15 +151,17 @@ export async function PUT(request: Request) {
         attachment_name: attachment_name || null,
       })
       .eq('id', id)
-      .select('*, users(full_name), classes(name)')
+      .select('*, classes(name)')
       .single()
 
     if (error) {
+      console.error('Erreur PUT announcement:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ data, error: null })
-  } catch {
+  } catch (error) {
+    console.error('Erreur API announcements PUT:', error)
     return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
   }
 }
@@ -187,11 +188,13 @@ export async function DELETE(request: Request) {
       .eq('id', id)
 
     if (error) {
+      console.error('Erreur DELETE announcement:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ data: { success: true }, error: null })
-  } catch {
+  } catch (error) {
+    console.error('Erreur API announcements DELETE:', error)
     return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
   }
 }
