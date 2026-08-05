@@ -1,164 +1,690 @@
-import { requireAdmin } from '@/lib/auth/get-session'
-import { createClient } from '@/lib/supabase/server'
-import type { Metadata } from 'next'
-import { formatDate, gradeColor, termLabel } from '@/lib/utils'
-import Link from 'next/link'
-import { Plus } from 'lucide-react'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Notes — EcoleConnect',
+import { useState, useEffect, useMemo, useRef } from 'react'
+import Link from 'next/link'
+import {
+  User,
+  Users,
+  Plus,
+  Search,
+  Check,
+  ChevronDown,
+  RefreshCw,
+  Sparkles,
+  Save,
+  Trash2,
+  BookOpen,
+  Calendar,
+  AlertCircle,
+  CheckCircle2,
+} from 'lucide-react'
+import { formatDate, gradeColor, calculateAverage } from '@/lib/utils'
+
+interface ClassItem {
+  id: string
+  name: string
+  level?: string
 }
 
-export default async function NotesAdminPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ student_id?: string; term?: string }>
-}) {
-  await requireAdmin()
-  const supabase = await createClient()
-  const params = await searchParams
+interface StudentItem {
+  id: string
+  first_name: string
+  last_name: string
+  class_id?: string
+}
 
-  const { data: students } = await supabase
-    .from('students')
-    .select('id, first_name, last_name, classes(name)')
-    .eq('is_active', true)
-    .order('last_name')
+interface GradeItem {
+  id: string
+  student_id: string
+  subject: string
+  score: number
+  coefficient: number
+  term: number
+  date: string
+  comment?: string
+  students?: { first_name: string; last_name: string }
+}
 
-  let grades: any[] = []
-  if (params.student_id) {
-    let query = supabase
-      .from('grades')
-      .select('*')
-      .eq('student_id', params.student_id)
-      .order('date', { ascending: false })
+export default function NotesAdminPage() {
+  // ── Mode Toggle: 'individual' (Mode Individuel) vs 'class' (Mode Classe / Saisie en Masse)
+  const [mode, setMode] = useState<'individual' | 'class'>('individual')
 
-    if (params.term) {
-      query = query.eq('term', parseInt(params.term))
+  // ── Master Data
+  const [classes, setClasses] = useState<ClassItem[]>([])
+  const [allStudents, setAllStudents] = useState<StudentItem[]>([])
+  const [dataLoading, setDataLoading] = useState(true)
+
+  // ── Filter States
+  const [selectedClassId, setSelectedClassId] = useState<string>('')
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('')
+  const [selectedSemester, setSelectedSemester] = useState<string>('1') // '1', '2', or ''
+  const [selectedSubject, setSelectedSubject] = useState<string>('Mathématiques')
+
+  // ── Searchable Select State for Student
+  const [studentSearch, setStudentSearch] = useState('')
+  const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // ── Grades State
+  const [grades, setGrades] = useState<GradeItem[]>([])
+  const [isFetchingGrades, setIsFetchingGrades] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  // ── Bulk Entry State (Class Mode Data Grid)
+  // Map of studentId -> { score: string, coefficient: string, comment: string }
+  const [bulkGrades, setBulkGrades] = useState<Record<string, { score: string; coefficient: string; comment: string }>>({})
+  const [isSavingBulk, setIsSavingBulk] = useState(false)
+
+  // ── Initial Fetch: Load Classes and Students
+  useEffect(() => {
+    async function loadInitialData() {
+      setDataLoading(true)
+      try {
+        const [resClasses, resStudents] = await Promise.all([
+          fetch('/api/admin/classes').then(r => r.json()),
+          fetch('/api/admin/students').then(r => r.json()),
+        ])
+
+        if (resClasses.data) setClasses(resClasses.data)
+        if (resStudents.data) setAllStudents(resStudents.data)
+      } catch (err) {
+        console.error('Erreur chargement données:', err)
+      } finally {
+        setDataLoading(false)
+      }
     }
+    loadInitialData()
+  }, [])
 
-    const { data } = await query
-    grades = data ?? []
+  // ── Filtered Students based on selected Class
+  const classStudents = useMemo(() => {
+    if (!selectedClassId) return []
+    return allStudents.filter(s => s.class_id === selectedClassId)
+  }, [selectedClassId, allStudents])
+
+  // Reset student selection when class changes
+  useEffect(() => {
+    setSelectedStudentId('')
+    setStudentSearch('')
+  }, [selectedClassId])
+
+  // ── Searchable Select Options for Student
+  const filteredStudentOptions = useMemo(() => {
+    if (!studentSearch.trim()) return classStudents
+    const query = studentSearch.toLowerCase()
+    return classStudents.filter(s =>
+      `${s.first_name} ${s.last_name}`.toLowerCase().includes(query) ||
+      `${s.last_name} ${s.first_name}`.toLowerCase().includes(query)
+    )
+  }, [classStudents, studentSearch])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsStudentDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // ── Selected Student Object
+  const selectedStudentObj = useMemo(() => {
+    return allStudents.find(s => s.id === selectedStudentId)
+  }, [allStudents, selectedStudentId])
+
+  // ── Auto-Fetch Logic for Individual Mode
+  useEffect(() => {
+    if (mode === 'individual' && selectedStudentId) {
+      fetchGradesForIndividual(selectedStudentId, selectedSemester)
+    }
+  }, [mode, selectedStudentId, selectedSemester])
+
+  // ── Auto-Fetch & Initialize for Class Mode
+  useEffect(() => {
+    if (mode === 'class' && selectedClassId) {
+      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester)
+    }
+  }, [mode, selectedClassId, selectedSubject, selectedSemester, classStudents])
+
+  async function fetchGradesForIndividual(studentId: string, semester: string) {
+    setIsFetchingGrades(true)
+    try {
+      let url = `/api/admin/grades?student_id=${studentId}`
+      if (semester) url += `&term=${semester}`
+      const res = await fetch(url)
+      const json = await res.json()
+      if (json.data) setGrades(json.data)
+    } catch (err) {
+      console.error('Erreur chargement notes:', err)
+    } finally {
+      setIsFetchingGrades(false)
+    }
   }
 
-  const selectedStudent = students?.find(s => s.id === params.student_id)
+  async function fetchGradesForClassMode(classId: string, subject: string, semester: string) {
+    setIsFetchingGrades(true)
+    try {
+      let url = `/api/admin/grades?class_id=${classId}`
+      if (subject) url += `&subject=${encodeURIComponent(subject)}`
+      if (semester) url += `&term=${semester}`
+      const res = await fetch(url)
+      const json = await res.json()
+      const existingGrades: GradeItem[] = json.data ?? []
 
-  // Calcul moyennes par matière
-  const subjectAverages = grades.reduce((acc, grade) => {
-    if (!acc[grade.subject]) acc[grade.subject] = []
-    acc[grade.subject].push(grade)
-    return acc
-  }, {} as Record<string, any[]>)
+      // Initialize Data Grid inputs with existing values or empty strings
+      const initialBulkState: Record<string, { score: string; coefficient: string; comment: string }> = {}
+      classStudents.forEach(st => {
+        const gradeObj = existingGrades.find(g => g.student_id === st.id)
+        initialBulkState[st.id] = {
+          score: gradeObj ? String(gradeObj.score) : '',
+          coefficient: gradeObj ? String(gradeObj.coefficient) : '1',
+          comment: gradeObj?.comment || '',
+        }
+      })
+      setBulkGrades(initialBulkState)
+      setGrades(existingGrades)
+    } catch (err) {
+      console.error('Erreur chargement notes classe:', err)
+    } finally {
+      setIsFetchingGrades(false)
+    }
+  }
+
+  // ── Manual Refresh Handler
+  function handleManualRefresh() {
+    if (mode === 'individual' && selectedStudentId) {
+      fetchGradesForIndividual(selectedStudentId, selectedSemester)
+    } else if (mode === 'class' && selectedClassId) {
+      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester)
+    }
+  }
+
+  // ── Submit Class Mode Bulk Grades
+  async function handleSaveBulkGrades(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedClassId) {
+      setSaveError('Veuillez sélectionner une classe.')
+      return
+    }
+
+    const entriesToSave = Object.entries(bulkGrades)
+      .filter(([_, val]) => val.score !== '' && !isNaN(parseFloat(val.score)))
+      .map(([studentId, val]) => ({
+        student_id: studentId,
+        subject: selectedSubject,
+        score: parseFloat(val.score),
+        coefficient: parseFloat(val.coefficient) || 1,
+        term: parseInt(selectedSemester || '1'),
+        date: new Date().toISOString().split('T')[0],
+        comment: val.comment || undefined,
+      }))
+
+    if (entriesToSave.length === 0) {
+      setSaveError('Veuillez saisir au moins une note valide.')
+      return
+    }
+
+    setIsSavingBulk(true)
+    setSaveError(null)
+    setSaveSuccess(null)
+
+    try {
+      const res = await fetch('/api/admin/grades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: entriesToSave }),
+      })
+      const json = await res.json()
+
+      if (!res.ok || json.error) {
+        setSaveError(json.error || 'Erreur lors de l\'enregistrement des notes.')
+        return
+      }
+
+      setSaveSuccess(`Succès ! ${entriesToSave.length} note(s) enregistrée(s) avec succès.`)
+      fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester)
+      setTimeout(() => setSaveSuccess(null), 4000)
+    } catch {
+      setSaveError('Erreur réseau lors de l\'enregistrement.')
+    } finally {
+      setIsSavingBulk(false)
+    }
+  }
+
+  // ── Delete single grade handler
+  async function handleDeleteGrade(gradeId: string) {
+    if (!confirm('Voulez-vous vraiment supprimer cette note ?')) return
+    try {
+      const res = await fetch(`/api/admin/grades?id=${gradeId}`, { method: 'DELETE' })
+      if (res.ok) {
+        if (mode === 'individual' && selectedStudentId) {
+          fetchGradesForIndividual(selectedStudentId, selectedSemester)
+        }
+      }
+    } catch (err) {
+      console.error('Erreur suppression note:', err)
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* En-tête avec titre et Switcher Mode */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Notes</h1>
-          <p className="text-slate-500 mt-1">Saisie et consultation par élève</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gestion des Notes</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Saisie rapide, consultation et évaluations des élèves</p>
         </div>
-        {params.student_id && (
-          <Link
-            href={`/admin/notes/ajouter?student_id=${params.student_id}`}
-            id="btn-add-grade"
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl transition shadow-sm"
+
+        {/* Toggle Switch Mode (Individuel vs Classe) */}
+        <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200 shadow-inner self-start sm:self-auto">
+          <button
+            onClick={() => setMode('individual')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              mode === 'individual'
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
-            <Plus size={18} />
-            Ajouter une note
-          </Link>
-        )}
+            <User size={16} />
+            Mode Individuel
+          </button>
+          <button
+            onClick={() => setMode('class')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              mode === 'class'
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Users size={16} />
+            Mode Classe (En Masse)
+          </button>
+        </div>
       </div>
 
-      {/* Sélecteur élève */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <form method="get" className="flex gap-4 items-end flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Élève</label>
+      {/* Bar des Filtres en Cascades */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          {/* 1. Class Dropdown */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              1. Classe
+            </label>
             <select
-              id="select-student"
-              name="student_id"
-              defaultValue={params.student_id}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              id="filter-class-select"
+              value={selectedClassId}
+              onChange={e => setSelectedClassId(e.target.value)}
+              disabled={dataLoading}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 transition"
             >
-              <option value="">Sélectionner un élève</option>
-              {students?.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.last_name} {s.first_name} — {(s.classes as any)?.name}
+              <option value="">Sélectionner une classe</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.level ? `(${c.level})` : ''}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* MODE INDIVIDUEL : Searchable Student Select */}
+          {mode === 'individual' ? (
+            <div className="relative" ref={dropdownRef}>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                2. Élève (Recherche)
+              </label>
+              <div
+                onClick={() => selectedClassId && setIsStudentDropdownOpen(!isStudentDropdownOpen)}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-white flex items-center justify-between transition cursor-pointer ${
+                  !selectedClassId
+                    ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
+                    : isStudentDropdownOpen
+                    ? 'border-blue-500 ring-2 ring-blue-500/20 text-slate-900'
+                    : 'border-slate-200 text-slate-800 hover:border-slate-300'
+                }`}
+              >
+                <span className="truncate">
+                  {!selectedClassId
+                    ? '⚠️ Choisissez d\'abord une classe'
+                    : selectedStudentObj
+                    ? `${selectedStudentObj.last_name} ${selectedStudentObj.first_name}`
+                    : 'Sélectionner un élève...'}
+                </span>
+                <ChevronDown size={16} className="text-slate-400 flex-shrink-0" />
+              </div>
+
+              {/* Autocomplete Dropdown List */}
+              {isStudentDropdownOpen && selectedClassId && (
+                <div className="absolute z-30 top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
+                    <Search size={16} className="text-slate-400 ml-1" />
+                    <input
+                      type="text"
+                      value={studentSearch}
+                      onChange={e => setStudentSearch(e.target.value)}
+                      placeholder="Tapez le nom de l'élève..."
+                      autoFocus
+                      className="w-full bg-transparent text-sm text-slate-800 focus:outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+                    {filteredStudentOptions.length === 0 ? (
+                      <div className="p-3.5 text-center text-xs text-slate-400">Aucun élève trouvé</div>
+                    ) : (
+                      filteredStudentOptions.map(s => (
+                        <div
+                          key={s.id}
+                          onClick={() => {
+                            setSelectedStudentId(s.id)
+                            setIsStudentDropdownOpen(false)
+                            setStudentSearch('')
+                          }}
+                          className={`px-4 py-2.5 text-sm cursor-pointer flex items-center justify-between transition ${
+                            selectedStudentId === s.id
+                              ? 'bg-blue-50 text-blue-700 font-semibold'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span>{s.last_name} {s.first_name}</span>
+                          {selectedStudentId === s.id && <Check size={16} className="text-blue-600" />}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* MODE CLASSE : Subject Select */
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                2. Matière
+              </label>
+              <input
+                id="filter-subject-input"
+                type="text"
+                value={selectedSubject}
+                onChange={e => setSelectedSubject(e.target.value)}
+                placeholder="ex: Mathématiques, Français, SVT"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+
+          {/* 3. Semester Select */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Semestre</label>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              3. Semestre
+            </label>
             <select
-              id="select-term"
-              name="term"
-              defaultValue={params.term}
-              className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              id="filter-semester-select"
+              value={selectedSemester}
+              onChange={e => setSelectedSemester(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Tous les semestres</option>
               <option value="1">Semestre 1</option>
               <option value="2">Semestre 2</option>
             </select>
           </div>
-          <button type="submit"
-            className="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-500 transition">
-            Afficher
-          </button>
-        </form>
+
+          {/* Action / Refresh Button */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleManualRefresh}
+              disabled={isFetchingGrades}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition shadow-sm"
+            >
+              <RefreshCw size={16} className={isFetchingGrades ? 'animate-spin' : ''} />
+              {isFetchingGrades ? 'Chargement...' : 'Actualiser'}
+            </button>
+
+            {mode === 'individual' && selectedStudentId && (
+              <Link
+                href={`/admin/notes/ajouter?student_id=${selectedStudentId}`}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition shadow-sm flex-shrink-0"
+              >
+                <Plus size={16} />
+                Saisir
+              </Link>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Notes */}
-      {selectedStudent && (
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* MODE INDIVIDUEL CONTENT                                      */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {mode === 'individual' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-              <span className="text-blue-600 text-sm font-semibold">
-                {selectedStudent.first_name[0]}{selectedStudent.last_name[0]}
-              </span>
-            </div>
-            <div>
-              <h2 className="font-semibold text-slate-900">{selectedStudent.last_name} {selectedStudent.first_name}</h2>
-              <p className="text-slate-500 text-sm">{(selectedStudent.classes as any)?.name}</p>
-            </div>
-          </div>
-
-          {grades.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-2xl border border-slate-200">
-              <p className="text-slate-500">Aucune note saisie pour cet élève</p>
+          {!selectedStudentId ? (
+            <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                <User size={24} />
+              </div>
+              <h3 className="font-bold text-slate-800">Aucun élève sélectionné</h3>
+              <p className="text-slate-500 text-sm max-w-sm mx-auto">
+                Veuillez d'abord choisir une classe, puis utiliser la recherche d'élève ci-dessus pour consulter ses notes.
+              </p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Matière</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Note</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Coeff.</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Semestre</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {grades.map(grade => (
-                    <tr key={grade.id} className="hover:bg-slate-50 transition">
-                      <td className="px-5 py-4 font-medium text-slate-900">{grade.subject}</td>
-                      <td className="px-5 py-4">
-                        <span className={`text-lg font-bold ${gradeColor(grade.score)}`}>
-                          {grade.score}/20
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-slate-500">×{grade.coefficient}</td>
-                      <td className="px-5 py-4">
-                        <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
-                          {termLabel(grade.term as 1 | 2 | 3)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-slate-500 text-sm hidden md:table-cell">{formatDate(grade.date)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <>
+              {/* Carte Résumé Élève + Moyenne */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                    {selectedStudentObj?.first_name[0]}{selectedStudentObj?.last_name[0]}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {selectedStudentObj?.last_name} {selectedStudentObj?.first_name}
+                    </h2>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                      {classes.find(c => c.id === selectedClassId)?.name} · {selectedSemester ? `Semestre ${selectedSemester}` : 'Toutes périodes'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Calcul Moyenne Générale */}
+                <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200/80">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Moyenne générale :</span>
+                  <span className={`text-2xl font-extrabold ${gradeColor(calculateAverage(grades) ?? 0)}`}>
+                    {calculateAverage(grades) !== null ? `${calculateAverage(grades)}/20` : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Table des Notes */}
+              {grades.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                  <p className="text-slate-500 text-sm">Aucune note enregistrée pour cet élève sur la période sélectionnée.</p>
+                  <Link
+                    href={`/admin/notes/ajouter?student_id=${selectedStudentId}`}
+                    className="inline-flex items-center gap-1.5 text-blue-600 text-sm font-semibold hover:underline"
+                  >
+                    <Plus size={16} /> Ajouter une première note
+                  </Link>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Matière</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Note sur 20</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Coeff.</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Semestre</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Date</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {grades.map(g => (
+                        <tr key={g.id} className="hover:bg-slate-50/80 transition">
+                          <td className="px-5 py-4 font-semibold text-slate-900">
+                            {g.subject}
+                            {g.comment && <p className="text-slate-400 text-xs font-normal mt-0.5">{g.comment}</p>}
+                          </td>
+                          <td className="px-5 py-4 font-bold text-base">
+                            <span className={gradeColor(g.score)}>{g.score}/20</span>
+                          </td>
+                          <td className="px-5 py-4 text-slate-500 font-medium">×{g.coefficient}</td>
+                          <td className="px-5 py-4">
+                            <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                              S{g.term}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-slate-500 text-xs hidden sm:table-cell">{formatDate(g.date)}</td>
+                          <td className="px-5 py-4 text-right">
+                            <button
+                              onClick={() => handleDeleteGrade(g.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                              title="Supprimer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* MODE CLASSE (Saisie en masse Data Grid)                       */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {mode === 'class' && (
+        <div className="space-y-4">
+          {!selectedClassId ? (
+            <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto">
+                <Users size={24} />
+              </div>
+              <h3 className="font-bold text-slate-800">Sélectionnez une classe</h3>
+              <p className="text-slate-500 text-sm max-w-sm mx-auto">
+                Choisissez une classe dans le filtre ci-dessus pour ouvrir la grille de saisie en masse des notes.
+              </p>
             </div>
+          ) : (
+            <form onSubmit={handleSaveBulkGrades} className="space-y-4">
+              {/* Alertes d'état */}
+              {saveSuccess && (
+                <div className="p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 size={18} className="text-green-600 flex-shrink-0" />
+                  <span>{saveSuccess}</span>
+                </div>
+              )}
+              {saveError && (
+                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle size={18} className="text-red-600 flex-shrink-0" />
+                  <span>{saveError}</span>
+                </div>
+              )}
+
+              {/* Data Grid Header info */}
+              <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold">Grille de saisie par classe : {classes.find(c => c.id === selectedClassId)?.name}</h2>
+                  <p className="text-blue-200 text-xs mt-0.5">
+                    Matière : <span className="font-semibold text-white">{selectedSubject}</span> · {selectedSemester ? `Semestre ${selectedSemester}` : 'Semestre 1'} · Remplissez et utilisez <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px]">Tab</kbd> pour naviguer rapide.
+                  </p>
+                </div>
+
+                <button
+                  id="btn-save-bulk-grades"
+                  type="submit"
+                  disabled={isSavingBulk || classStudents.length === 0}
+                  className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition text-sm flex-shrink-0"
+                >
+                  <Save size={18} />
+                  {isSavingBulk ? 'Enregistrement...' : 'Enregistrer toute la classe'}
+                </button>
+              </div>
+
+              {/* Data Grid Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                {classStudents.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 text-sm">
+                    Aucun élève inscrit dans cette classe.
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">#</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Élève</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-36">Note sur 20 *</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">Coeff.</th>
+                        <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Appréciation / Commentaire</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {classStudents.map((st, idx) => {
+                        const rowVal = bulkGrades[st.id] || { score: '', coefficient: '1', comment: '' }
+                        return (
+                          <tr key={st.id} className="hover:bg-slate-50/70 transition">
+                            <td className="px-5 py-3 text-slate-400 font-mono text-xs">{idx + 1}</td>
+                            <td className="px-5 py-3 font-bold text-slate-900">
+                              {st.last_name} {st.first_name}
+                            </td>
+                            <td className="px-5 py-3">
+                              <input
+                                id={`score-input-${st.id}`}
+                                type="number"
+                                step="0.25"
+                                min="0"
+                                max="20"
+                                placeholder="/20"
+                                value={rowVal.score}
+                                onChange={e => setBulkGrades({
+                                  ...bulkGrades,
+                                  [st.id]: { ...rowVal, score: e.target.value },
+                                })}
+                                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </td>
+                            <td className="px-5 py-3">
+                              <input
+                                id={`coeff-input-${st.id}`}
+                                type="number"
+                                min="0.5"
+                                step="0.5"
+                                value={rowVal.coefficient}
+                                onChange={e => setBulkGrades({
+                                  ...bulkGrades,
+                                  [st.id]: { ...rowVal, coefficient: e.target.value },
+                                })}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </td>
+                            <td className="px-5 py-3">
+                              <input
+                                id={`comment-input-${st.id}`}
+                                type="text"
+                                placeholder="ex: Bon travail, participer davantage"
+                                value={rowVal.comment}
+                                onChange={e => setBulkGrades({
+                                  ...bulkGrades,
+                                  [st.id]: { ...rowVal, comment: e.target.value },
+                                })}
+                                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </form>
           )}
         </div>
       )}
