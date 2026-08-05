@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { UserPlus, BookOpen, ChevronDown, Check, X, Search, School, Plus } from 'lucide-react'
+import { UserPlus, BookOpen, ChevronDown, Check, X, Search, School, Plus, Settings, Edit2, Trash2 } from 'lucide-react'
 
 interface ClassItem {
   id: string
@@ -42,6 +42,13 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
   const [subjectSearchQuery, setSubjectSearchQuery] = useState('')
   const subjectDropdownRef = useRef<HTMLDivElement>(null)
 
+  // 🌟 SUBJECT MANAGEMENT MODAL STATE
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false)
+  const [editingSubjectIndex, setEditingSubjectIndex] = useState<number | null>(null)
+  const [editingSubjectText, setEditingSubjectText] = useState('')
+  const [newSubjectInput, setNewSubjectInput] = useState('')
+  const [modalSearchQuery, setModalSearchQuery] = useState('')
+
   // CLASSES MULTI-SELECT STATE
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([])
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false)
@@ -57,7 +64,6 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
     const trimmed = newSub.trim()
     if (!trimmed) return
 
-    // Capitalize first letter neatly
     const formatted = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
 
     if (!availableSubjects.some(s => s.toLowerCase() === formatted.toLowerCase())) {
@@ -66,6 +72,48 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
     setSubject(formatted)
     setSubjectSearchQuery('')
     setIsSubjectDropdownOpen(false)
+  }
+
+  // Manage Modal: Add Subject
+  const handleAddSubjectFromModal = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newSubjectInput.trim()) return
+    const formatted = newSubjectInput.trim().charAt(0).toUpperCase() + newSubjectInput.trim().slice(1)
+
+    if (!availableSubjects.some(s => s.toLowerCase() === formatted.toLowerCase())) {
+      setAvailableSubjects(prev => [...prev, formatted])
+      setNewSubjectInput('')
+    }
+  }
+
+  // Manage Modal: Save Edit Subject
+  const handleSaveEditSubject = (index: number) => {
+    if (!editingSubjectText.trim()) return
+    const formatted = editingSubjectText.trim().charAt(0).toUpperCase() + editingSubjectText.trim().slice(1)
+    const oldSubject = availableSubjects[index]
+
+    setAvailableSubjects(prev => prev.map((s, idx) => idx === index ? formatted : s))
+    if (subject === oldSubject) {
+      setSubject(formatted)
+    }
+    setEditingSubjectIndex(null)
+    setEditingSubjectText('')
+  }
+
+  // Manage Modal: Delete Subject
+  const handleDeleteSubject = (targetSub: string) => {
+    if (availableSubjects.length <= 1) {
+      alert('Vous devez conserver au moins une matière dans le catalogue.')
+      return
+    }
+
+    if (confirm(`Voulez-vous vraiment supprimer la matière "${targetSub}" du catalogue ?`)) {
+      const updated = availableSubjects.filter(s => s !== targetSub)
+      setAvailableSubjects(updated)
+      if (subject === targetSub) {
+        setSubject(updated[0])
+      }
+    }
   }
 
   const toggleClass = (classId: string) => {
@@ -125,6 +173,10 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
     s => s.toLowerCase() === subjectSearchQuery.trim().toLowerCase()
   )
 
+  const modalFilteredSubjects = availableSubjects.filter(s =>
+    s.toLowerCase().includes(modalSearchQuery.toLowerCase())
+  )
+
   const filteredClasses = classes.filter(c =>
     c.name.toLowerCase().includes(classSearchQuery.toLowerCase()) ||
     (c.level && c.level.toLowerCase().includes(classSearchQuery.toLowerCase()))
@@ -182,12 +234,22 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
           />
         </div>
 
-        {/* 🌟 CREATABLE MATIÈRE ENSEIGNÉE COMBOBOX */}
+        {/* 🌟 CREATABLE MATIÈRE ENSEIGNÉE COMBOBOX + MANAGE BUTTON */}
         <div className="relative" ref={subjectDropdownRef}>
-          <label className="block text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-            <BookOpen size={14} className="text-indigo-600" />
-            Matière enseignée *
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <BookOpen size={14} className="text-indigo-600" />
+              Matière enseignée *
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsManageModalOpen(true)}
+              className="text-xs font-extrabold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 transition"
+            >
+              <Settings size={13} />
+              Gérer
+            </button>
+          </div>
 
           <div
             onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
@@ -199,7 +261,7 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
 
           {/* Creatable Dropdown Menu */}
           {isSubjectDropdownOpen && (
-            <div className="absolute z-40 top-full left-0 right-0 mt-1 bg-white rounded-2xl border border-slate-200 shadow-2xl p-2.5 space-y-2 animate-fadeIn max-h-64 overflow-y-auto">
+            <div className="absolute z-40 top-full left-0 right-0 mt-1 bg-white rounded-2xl border border-slate-200 shadow-2xl p-2.5 space-y-2 animate-fadeIn max-h-72 overflow-y-auto">
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
                 <input
@@ -244,6 +306,18 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
                     </div>
                   )
                 })}
+              </div>
+
+              {/* Manage Subjects Footer Action */}
+              <div
+                onClick={() => {
+                  setIsSubjectDropdownOpen(false)
+                  setIsManageModalOpen(true)
+                }}
+                className="pt-2 border-t border-slate-100 text-center text-xs font-extrabold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center justify-center gap-1.5 transition"
+              >
+                <Settings size={13} />
+                <span>Gérer le catalogue des matières</span>
               </div>
             </div>
           )}
@@ -333,6 +407,149 @@ export default function InviteTeacherForm({ classes }: InviteTeacherFormProps) {
           {loading ? 'Enregistrement...' : 'Enregistrer le professeur'}
         </button>
       </form>
+
+      {/* 🌟 SUBJECT MANAGEMENT MODAL (GESTION DU CATALOGUE DES MATIÈRES) */}
+      {isManageModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden space-y-4">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                  <BookOpen size={18} />
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-base">Gestion du Catalogue des Matières</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsManageModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5 space-y-4">
+              {/* Form to quick-add subject */}
+              <form onSubmit={handleAddSubjectFromModal} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newSubjectInput}
+                  onChange={e => setNewSubjectInput(e.target.value)}
+                  placeholder="Ajouter une nouvelle matière..."
+                  className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1"
+                >
+                  <Plus size={15} />
+                  <span>Ajouter</span>
+                </button>
+              </form>
+
+              {/* Filter search input */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={modalSearchQuery}
+                  onChange={e => setModalSearchQuery(e.target.value)}
+                  placeholder="Rechercher une matière dans le catalogue..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none"
+                />
+              </div>
+
+              {/* Subjects Master List */}
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
+                {modalFilteredSubjects.length === 0 ? (
+                  <p className="p-4 text-center text-slate-400 text-xs italic">Aucune matière trouvée.</p>
+                ) : (
+                  modalFilteredSubjects.map((sub) => {
+                    const originalIndex = availableSubjects.indexOf(sub)
+                    const isEditing = editingSubjectIndex === originalIndex
+
+                    return (
+                      <div key={sub} className="p-3 flex items-center justify-between gap-2 hover:bg-slate-50 transition">
+                        {isEditing ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              type="text"
+                              value={editingSubjectText}
+                              onChange={e => setEditingSubjectText(e.target.value)}
+                              className="px-3 py-1 bg-white border border-indigo-400 rounded-lg text-xs font-bold flex-1 text-slate-900 focus:outline-none"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveEditSubject(originalIndex)}
+                              className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-500 transition"
+                            >
+                              Valider
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingSubjectIndex(null)}
+                              className="px-2 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-300 transition"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800 text-xs">{sub}</span>
+                              {subject === sub && (
+                                <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-extrabold border border-indigo-100">
+                                  Sélectionnée
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSubjectIndex(originalIndex)
+                                  setEditingSubjectText(sub)
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                                title="Modifier"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubject(sub)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                title="Supprimer"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsManageModalOpen(false)}
+                className="px-5 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl shadow-xs hover:bg-indigo-500 transition"
+              >
+                Terminer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
