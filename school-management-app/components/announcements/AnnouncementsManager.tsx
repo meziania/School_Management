@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Megaphone, Plus, Edit, Trash2, X, CheckCircle2, AlertCircle, AlertTriangle,
   Paperclip, Bold, Italic, List, Link as LinkIcon, Eye, Code, FileText, Download,
-  ChevronDown, Search, Check, Users, GraduationCap, School
+  ChevronDown, Search, Check, Users, GraduationCap, School, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 
@@ -65,6 +65,12 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
 
   // Delete Modal State
   const [deletingAnn, setDeletingAnn] = useState<AnnouncementItem | null>(null)
+
+  // 🌟 PAGINATION STATE
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 4
+  const totalPages = Math.ceil(announcements.length / pageSize) || 1
+  const paginatedAnnouncements = announcements.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -183,6 +189,7 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
       }
 
       setAnnouncements([json.data, ...announcements])
+      setCurrentPage(1)
       setTitle('')
       setContent('')
       setSelectedTargets(['all'])
@@ -257,6 +264,7 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
       }
 
       setAnnouncements(prev => prev.filter(a => a.id !== id))
+      setCurrentPage(1)
       setDeletingAnn(null)
       showToast('Annonce supprimée avec succès !')
       router.refresh()
@@ -305,339 +313,377 @@ export default function AnnouncementsManager({ classes, initialAnnouncements }: 
         </div>
       )}
 
-      {/* 🌟 FORMULAIRE NOUVELLE ANNONCE ENRICHI */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
-        <h2 className="font-extrabold text-slate-900 flex items-center gap-2 text-lg border-b border-slate-100 pb-3">
-          <Megaphone size={20} className="text-blue-600" />
-          Publier une annonce officielle
-        </h2>
+      {/* 🌟 TWO-COLUMN GRID LAYOUT (FORM ON LEFT, PAGINATED LIST ON RIGHT) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* LEFT COLUMN: FORMULAIRE NOUVELLE ANNONCE (7 COLS ON DESKTOP) */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
+          <h2 className="font-extrabold text-slate-900 flex items-center gap-2 text-lg border-b border-slate-100 pb-3">
+            <Megaphone size={20} className="text-blue-600" />
+            Publier une annonce officielle
+          </h2>
 
-        <form onSubmit={handleCreate} className="space-y-5">
-          {/* Titre */}
-          <div>
-            <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">Titre de l'annonce *</label>
-            <input
-              id="announcement-title"
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              required
-              placeholder="ex: Planning des examens du Semestre 1, Réunion parents-professeurs..."
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50"
-            />
-          </div>
-
-          {/* 🌟 RICH TEXT EDITOR WITH FORMATTING TOOLBAR */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider">Contenu explicatif *</label>
-              <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
-                <button
-                  type="button"
-                  onClick={() => setEditorMode('edit')}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition flex items-center gap-1 ${
-                    editorMode === 'edit' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <Code size={13} /> Éditeur
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditorMode('preview')}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition flex items-center gap-1 ${
-                    editorMode === 'preview' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <Eye size={13} /> Aperçu du rendu
-                </button>
-              </div>
+          <form onSubmit={handleCreate} className="space-y-5">
+            {/* Titre */}
+            <div>
+              <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">Titre de l'annonce *</label>
+              <input
+                id="announcement-title"
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                required
+                placeholder="ex: Planning des examens du Semestre 1, Réunion parents-professeurs..."
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50"
+              />
             </div>
 
-            {editorMode === 'edit' ? (
-              <div className="border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
-                {/* Toolbar */}
-                <div className="flex items-center gap-1 p-2 bg-slate-50 border-b border-slate-200 flex-wrap">
+            {/* RICH TEXT EDITOR WITH FORMATTING TOOLBAR */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider">Contenu explicatif *</label>
+                <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
                   <button
                     type="button"
-                    onClick={() => insertFormatting('**', '**')}
-                    className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 font-bold transition text-xs flex items-center gap-1"
-                    title="Gras (**texte**)"
+                    onClick={() => setEditorMode('edit')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition flex items-center gap-1 ${
+                      editorMode === 'edit' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
                   >
-                    <Bold size={15} />
+                    <Code size={13} /> Éditeur
                   </button>
                   <button
                     type="button"
-                    onClick={() => insertFormatting('*', '*')}
-                    className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 italic transition text-xs flex items-center gap-1"
-                    title="Italique (*texte*)"
+                    onClick={() => setEditorMode('preview')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition flex items-center gap-1 ${
+                      editorMode === 'preview' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
                   >
-                    <Italic size={15} />
-                  </button>
-                  <div className="h-4 w-px bg-slate-300 mx-1" />
-                  <button
-                    type="button"
-                    onClick={() => insertFormatting('• ')}
-                    className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition text-xs flex items-center gap-1"
-                    title="Puce list (• point)"
-                  >
-                    <List size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertFormatting('> ')}
-                    className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition text-xs font-bold"
-                    title="Mise en avant"
-                  >
-                    💡 Important
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertFormatting('[Lien](https://', ')')}
-                    className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition text-xs flex items-center gap-1"
-                    title="Lien [nom](url)"
-                  >
-                    <LinkIcon size={15} />
+                    <Eye size={13} /> Aperçu
                   </button>
                 </div>
-
-                <textarea
-                  id="announcement-content"
-                  value={content}
-                  onChange={e => setContent(e.target.value)}
-                  required
-                  rows={5}
-                  placeholder="Rédigez l'annonce officielle ici. Utilisez la barre d'outils ci-dessus pour appliquer du gras, des listes à puces ou des liens..."
-                  className="w-full px-4 py-3 text-sm font-medium text-slate-900 focus:outline-none resize-none leading-relaxed"
-                />
               </div>
-            ) : (
-              <div className="min-h-[140px] p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm leading-relaxed space-y-1">
-                {content.trim() ? renderFormattedText(content) : <p className="text-slate-400 italic">Aucun contenu à afficher.</p>}
-              </div>
-            )}
-          </div>
 
-          {/* 🌟 FILE ATTACHMENTS ZONE (PIÈCES JOINTES) */}
-          <div>
-            <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">
-              Pièces jointes (Documents PDF, Images, Plannings)
-            </label>
+              {editorMode === 'edit' ? (
+                <div className="border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+                  {/* Toolbar */}
+                  <div className="flex items-center gap-1 p-2 bg-slate-50 border-b border-slate-200 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => insertFormatting('**', '**')}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 font-bold transition text-xs flex items-center gap-1"
+                      title="Gras (**texte**)"
+                    >
+                      <Bold size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertFormatting('*', '*')}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 italic transition text-xs flex items-center gap-1"
+                      title="Italique (*texte*)"
+                    >
+                      <Italic size={15} />
+                    </button>
+                    <div className="h-4 w-px bg-slate-300 mx-1" />
+                    <button
+                      type="button"
+                      onClick={() => insertFormatting('• ')}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition text-xs flex items-center gap-1"
+                      title="Puce list (• point)"
+                    >
+                      <List size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertFormatting('> ')}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition text-xs font-bold"
+                      title="Mise en avant"
+                    >
+                      💡 Important
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertFormatting('[Lien](https://', ')')}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition text-xs flex items-center gap-1"
+                      title="Lien [nom](url)"
+                    >
+                      <LinkIcon size={15} />
+                    </button>
+                  </div>
 
-            {attachedFile ? (
-              <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/60 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <p className="font-extrabold text-slate-900 text-sm">{attachedFile.name}</p>
-                    <p className="text-slate-500 text-xs font-medium">{attachedFile.size || 'Fichier joint'}</p>
-                  </div>
+                  <textarea
+                    id="announcement-content"
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                    required
+                    rows={5}
+                    placeholder="Rédigez l'annonce officielle ici. Utilisez la barre d'outils ci-dessus..."
+                    className="w-full px-4 py-3 text-sm font-medium text-slate-900 focus:outline-none resize-none leading-relaxed"
+                  />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setAttachedFile(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                  title="Supprimer la pièce jointe"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            ) : (
-              <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer bg-slate-50/50 hover:bg-blue-50/20 transition">
-                <Paperclip className="text-blue-600 mb-1" size={24} />
-                <span className="text-sm font-extrabold text-slate-800">Joindre un document ou image</span>
-                <span className="text-xs text-slate-400 font-medium mt-0.5">PDF, PNG, JPG, DOCX jusqu'à 10 Mo</span>
-                <input
-                  type="file"
-                  onChange={e => handleFileUpload(e, false)}
-                  className="hidden"
-                  accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx"
-                />
+              ) : (
+                <div className="min-h-[140px] p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm leading-relaxed space-y-1">
+                  {content.trim() ? renderFormattedText(content) : <p className="text-slate-400 italic">Aucun contenu à afficher.</p>}
+                </div>
+              )}
+            </div>
+
+            {/* FILE ATTACHMENTS ZONE */}
+            <div>
+              <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">
+                Pièces jointes (PDF, Images, Documents)
               </label>
-            )}
-          </div>
 
-          {/* 🌟 ADVANCED TARGETING MULTI-SELECT COMBOBOX */}
-          <div className="relative" ref={targetDropdownRef}>
-            <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">
-              Destinataires ciblé(s) (Multi-sélection par rôles et classes) *
-            </label>
-
-            <div
-              onClick={() => setIsTargetDropdownOpen(!isTargetDropdownOpen)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white min-h-[44px] flex items-center justify-between cursor-pointer flex-wrap gap-1.5"
-            >
-              <div className="flex flex-wrap items-center gap-1.5">
-                {selectedTargets.map(targetId => (
-                  <span
-                    key={targetId}
-                    className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-900 text-xs font-bold inline-flex items-center gap-1 border border-blue-200"
+              {attachedFile ? (
+                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/60 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-slate-900 text-sm">{attachedFile.name}</p>
+                      <p className="text-slate-500 text-xs font-medium">{attachedFile.size || 'Fichier joint'}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                    title="Supprimer la pièce jointe"
                   >
-                    {getTargetLabel(targetId)}
-                    {selectedTargets.length > 1 && (
-                      <X
-                        size={12}
-                        className="hover:text-red-600 cursor-pointer"
-                        onClick={(e) => { e.stopPropagation(); toggleTarget(targetId) }}
-                      />
-                    )}
-                  </span>
-                ))}
-              </div>
-              <ChevronDown size={18} className="text-slate-400 flex-shrink-0" />
+                    <X size={18} />
+                  </button>
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer bg-slate-50/50 hover:bg-blue-50/20 transition">
+                  <Paperclip className="text-blue-600 mb-1" size={24} />
+                  <span className="text-sm font-extrabold text-slate-800">Joindre un document ou image</span>
+                  <span className="text-xs text-slate-400 font-medium mt-0.5">PDF, PNG, JPG, DOCX jusqu'à 10 Mo</span>
+                  <input
+                    type="file"
+                    onChange={e => handleFileUpload(e, false)}
+                    className="hidden"
+                    accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx"
+                  />
+                </label>
+              )}
             </div>
 
-            {/* Dropdown menu */}
-            {isTargetDropdownOpen && (
-              <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white rounded-2xl border border-slate-200 shadow-2xl p-3 space-y-2 animate-fadeIn max-h-72 overflow-y-auto">
-                <input
-                  type="text"
-                  value={targetSearchQuery}
-                  onChange={e => setTargetSearchQuery(e.target.value)}
-                  placeholder="Rechercher un rôle ou une classe..."
-                  className="w-full p-2 bg-slate-50 border rounded-xl text-xs font-medium"
-                />
+            {/* ADVANCED TARGETING MULTI-SELECT COMBOBOX */}
+            <div className="relative" ref={targetDropdownRef}>
+              <label className="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1.5">
+                Destinataires ciblé(s) *
+              </label>
 
-                {/* Predefined Roles Group */}
-                <div className="space-y-1">
-                  <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider px-2">Rôles Globaux</p>
-                  {PREDEFINED_ROLES.filter(r => r.name.toLowerCase().includes(targetSearchQuery.toLowerCase())).map(r => {
-                    const isSelected = selectedTargets.includes(r.id)
-                    return (
-                      <div
-                        key={r.id}
-                        onClick={() => toggleTarget(r.id)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition ${
-                          isSelected ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <r.icon size={14} className="text-blue-600" />
-                          {r.name}
-                        </span>
-                        {isSelected && <Check size={16} className="text-blue-600" />}
-                      </div>
-                    )
-                  })}
+              <div
+                onClick={() => setIsTargetDropdownOpen(!isTargetDropdownOpen)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white min-h-[44px] flex items-center justify-between cursor-pointer flex-wrap gap-1.5"
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {selectedTargets.map(targetId => (
+                    <span
+                      key={targetId}
+                      className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-900 text-xs font-bold inline-flex items-center gap-1 border border-blue-200"
+                    >
+                      {getTargetLabel(targetId)}
+                      {selectedTargets.length > 1 && (
+                        <X
+                          size={12}
+                          className="hover:text-red-600 cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); toggleTarget(targetId) }}
+                        />
+                      )}
+                    </span>
+                  ))}
                 </div>
-
-                {/* Specific Classes Group */}
-                <div className="space-y-1 pt-2 border-t border-slate-100">
-                  <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider px-2">Classes Spécifiques</p>
-                  {classes.filter(c => c.name.toLowerCase().includes(targetSearchQuery.toLowerCase())).map(cls => {
-                    const targetId = `class:${cls.id}`
-                    const isSelected = selectedTargets.includes(targetId)
-                    return (
-                      <div
-                        key={cls.id}
-                        onClick={() => toggleTarget(targetId)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition ${
-                          isSelected ? 'bg-purple-50 text-purple-900' : 'hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <span>🏫 Classe : {cls.name}</span>
-                        {isSelected && <Check size={16} className="text-purple-600" />}
-                      </div>
-                    )
-                  })}
-                </div>
+                <ChevronDown size={18} className="text-slate-400 flex-shrink-0" />
               </div>
-            )}
-          </div>
 
-          <button
-            id="btn-publish-announcement"
-            type="submit"
-            disabled={isSubmitting}
-            className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-extrabold rounded-xl transition shadow-md text-sm"
-          >
-            <Plus size={18} />
-            {isSubmitting ? 'Publication en cours...' : 'Publier le communiqué officiel'}
-          </button>
-        </form>
-      </div>
+              {/* Dropdown menu */}
+              {isTargetDropdownOpen && (
+                <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white rounded-2xl border border-slate-200 shadow-2xl p-3 space-y-2 animate-fadeIn max-h-72 overflow-y-auto">
+                  <input
+                    type="text"
+                    value={targetSearchQuery}
+                    onChange={e => setTargetSearchQuery(e.target.value)}
+                    placeholder="Rechercher un rôle ou une classe..."
+                    className="w-full p-2 bg-slate-50 border rounded-xl text-xs font-medium"
+                  />
 
-      {/* 🌟 LISTE DES ANNONCES PUBLIÉES */}
-      <div className="space-y-3">
-        <h2 className="font-extrabold text-slate-800 text-base">Annonces publiées ({announcements.length})</h2>
-
-        {announcements.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 shadow-sm">
-            <Megaphone className="text-slate-300 mx-auto mb-2" size={32} />
-            <p className="text-slate-500 text-sm font-medium">Aucune annonce n'a été publiée.</p>
-          </div>
-        ) : (
-          announcements.map(ann => {
-            const targetsList = ann.targets && ann.targets.length > 0
-              ? ann.targets
-              : (ann.class_id ? [`class:${ann.class_id}`] : ['all'])
-
-            return (
-              <article key={ann.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-slate-300 transition shadow-xs space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-extrabold text-slate-900 text-base">{ann.title}</h3>
-                      
-                      {/* Target Badges */}
-                      <div className="flex flex-wrap items-center gap-1">
-                        {targetsList.map(t => (
-                          <span key={t} className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-800 text-xs font-extrabold border border-blue-100">
-                            {getTargetLabel(t)}
+                  {/* Predefined Roles Group */}
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider px-2">Rôles Globaux</p>
+                    {PREDEFINED_ROLES.filter(r => r.name.toLowerCase().includes(targetSearchQuery.toLowerCase())).map(r => {
+                      const isSelected = selectedTargets.includes(r.id)
+                      return (
+                        <div
+                          key={r.id}
+                          onClick={() => toggleTarget(r.id)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition ${
+                            isSelected ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <r.icon size={14} className="text-blue-600" />
+                            {r.name}
                           </span>
-                        ))}
+                          {isSelected && <Check size={16} className="text-blue-600" />}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Specific Classes Group */}
+                  <div className="space-y-1 pt-2 border-t border-slate-100">
+                    <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider px-2">Classes Spécifiques</p>
+                    {classes.filter(c => c.name.toLowerCase().includes(targetSearchQuery.toLowerCase())).map(cls => {
+                      const targetId = `class:${cls.id}`
+                      const isSelected = selectedTargets.includes(targetId)
+                      return (
+                        <div
+                          key={cls.id}
+                          onClick={() => toggleTarget(targetId)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition ${
+                            isSelected ? 'bg-purple-50 text-purple-900' : 'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <span>🏫 Classe : {cls.name}</span>
+                          {isSelected && <Check size={16} className="text-purple-600" />}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              id="btn-publish-announcement"
+              type="submit"
+              disabled={isSubmitting}
+              className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-extrabold rounded-xl transition shadow-md text-sm"
+            >
+              <Plus size={18} />
+              {isSubmitting ? 'Publication en cours...' : 'Publier le communiqué officiel'}
+            </button>
+          </form>
+        </div>
+
+        {/* 🌟 RIGHT COLUMN: ANNONCES PUBLIÉES + PAGINATION (5 COLS ON DESKTOP) */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+            <h2 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+              <span>Annonces publiées</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-extrabold border border-blue-100">
+                {announcements.length}
+              </span>
+            </h2>
+          </div>
+
+          {paginatedAnnouncements.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <Megaphone className="text-slate-300 mx-auto mb-2" size={32} />
+              <p className="text-slate-500 text-sm font-medium">Aucune annonce n'a été publiée.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {paginatedAnnouncements.map(ann => {
+                const targetsList = ann.targets && ann.targets.length > 0
+                  ? ann.targets
+                  : (ann.class_id ? [`class:${ann.class_id}`] : ['all'])
+
+                return (
+                  <article key={ann.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-slate-300 transition shadow-xs space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1.5">
+                        <h3 className="font-extrabold text-slate-900 text-base leading-snug">{ann.title}</h3>
+                        
+                        {/* Target Badges */}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {targetsList.map(t => (
+                            <span key={t} className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-800 text-[11px] font-extrabold border border-blue-100">
+                              {getTargetLabel(t)}
+                            </span>
+                          ))}
+                        </div>
+
+                        <p className="text-slate-400 text-xs font-medium">{formatDateTime(ann.created_at)}</p>
+                      </div>
+
+                      {/* Actions Modifier / Supprimer */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(ann)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                          title="Modifier l'annonce"
+                        >
+                          <Edit size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingAnn(ann)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                          title="Supprimer l'annonce"
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
                     </div>
-                    <p className="text-slate-400 text-xs font-medium">{formatDateTime(ann.created_at)}</p>
-                  </div>
 
-                  {/* Actions Modifier / Supprimer */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(ann)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
-                      title="Modifier l'annonce"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingAnn(ann)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                      title="Supprimer l'annonce"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
+                    {/* Formatted Text Content */}
+                    <div className="text-slate-800 text-xs leading-relaxed font-medium space-y-1">
+                      {renderFormattedText(ann.content)}
+                    </div>
 
-                {/* Formatted Text Content */}
-                <div className="text-slate-800 text-sm leading-relaxed font-medium space-y-1">
-                  {renderFormattedText(ann.content)}
-                </div>
+                    {/* Attached File Download Box */}
+                    {ann.attachment_url && (
+                      <div className="pt-1">
+                        <a
+                          href={ann.attachment_url}
+                          download={ann.attachment_name || 'document'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-slate-800 hover:text-blue-900 text-xs font-bold transition shadow-2xs"
+                        >
+                          <Paperclip size={14} className="text-blue-600" />
+                          <span className="truncate max-w-[200px]">{ann.attachment_name || 'Pièce jointe'}</span>
+                          <Download size={13} className="text-slate-400 ml-1" />
+                        </a>
+                      </div>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+          )}
 
-                {/* Attached File Download Box */}
-                {ann.attachment_url && (
-                  <div className="pt-2">
-                    <a
-                      href={ann.attachment_url}
-                      download={ann.attachment_name || 'document'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-slate-800 hover:text-blue-900 text-xs font-bold transition shadow-2xs"
-                    >
-                      <Paperclip size={16} className="text-blue-600" />
-                      <span>{ann.attachment_name || 'Pièce jointe'}</span>
-                      <Download size={14} className="text-slate-400 ml-1" />
-                    </a>
-                  </div>
-                )}
-              </article>
-            )
-          })
-        )}
+          {/* 🌟 PAGINATION CONTROLS */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition flex items-center gap-1"
+              >
+                <ChevronLeft size={14} /> Précédent
+              </button>
+
+              <span className="text-xs font-extrabold text-slate-600">
+                Page {currentPage} sur {totalPages}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition flex items-center gap-1"
+              >
+                Suivant <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* EDIT MODAL WITH RICH TEXT & FILE & TARGETS */}
