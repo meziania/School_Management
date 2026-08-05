@@ -16,8 +16,10 @@ import {
   CheckCircle2,
   Award,
   Calculator,
+  BookOpen,
 } from 'lucide-react'
 import { formatDate, gradeColor, calculateAverage } from '@/lib/utils'
+import { Subject, getSubjectsForLevel, MOROCCAN_SUBJECTS_CATALOG } from '@/lib/constants/subjects'
 
 interface ClassItem {
   id: string
@@ -58,9 +60,15 @@ export default function NotesAdminPage() {
   const [selectedSubject, setSelectedSubject] = useState<string>('Mathématiques')
   const [selectedExamType, setSelectedExamType] = useState<string>('controle_continu')
 
+  // Searchable Select State for Student
   const [studentSearch, setStudentSearch] = useState('')
   const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const studentDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Searchable Select State for Subject (Matière)
+  const [subjectSearch, setSubjectSearch] = useState('')
+  const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false)
+  const subjectDropdownRef = useRef<HTMLDivElement>(null)
 
   const [grades, setGrades] = useState<GradeItem[]>([])
   const [isFetchingGrades, setIsFetchingGrades] = useState(false)
@@ -70,6 +78,7 @@ export default function NotesAdminPage() {
   const [bulkGrades, setBulkGrades] = useState<Record<string, { score: string; coefficient: string; comment: string }>>({})
   const [isSavingBulk, setIsSavingBulk] = useState(false)
 
+  // 1. Initial Load of Classes and Students
   useEffect(() => {
     async function loadInitialData() {
       setDataLoading(true)
@@ -95,7 +104,21 @@ export default function NotesAdminPage() {
 
   const selectedClassLevel = selectedClassObj?.level || ''
 
-  // Examens disponibles selon le Niveau du système marocain
+  // 2. Dynamic Level-Filtered Subjects Catalog
+  const availableSubjects = useMemo(() => {
+    return getSubjectsForLevel(selectedClassLevel)
+  }, [selectedClassLevel])
+
+  const filteredSubjectOptions = useMemo(() => {
+    if (!subjectSearch.trim()) return availableSubjects
+    const query = subjectSearch.toLowerCase()
+    return availableSubjects.filter(s =>
+      s.name.toLowerCase().includes(query) ||
+      s.code.toLowerCase().includes(query)
+    )
+  }, [availableSubjects, subjectSearch])
+
+  // 3. Available Exam Types based on Moroccan Level
   const availableExamTypes = useMemo(() => {
     const list = [{ id: 'controle_continu', label: 'Contrôle Continu' }]
     if (selectedClassLevel === '6AP') {
@@ -116,11 +139,18 @@ export default function NotesAdminPage() {
     return allStudents.filter(s => s.class_id === selectedClassId)
   }, [selectedClassId, allStudents])
 
+  // Reset student and subject choices when class changes
   useEffect(() => {
     setSelectedStudentId('')
     setStudentSearch('')
+    setSubjectSearch('')
     setSelectedExamType('controle_continu')
-  }, [selectedClassId])
+
+    // Pre-select first available subject if current subject not in level catalog
+    if (availableSubjects.length > 0) {
+      setSelectedSubject(availableSubjects[0].name)
+    }
+  }, [selectedClassId, availableSubjects])
 
   const filteredStudentOptions = useMemo(() => {
     if (!studentSearch.trim()) return classStudents
@@ -131,10 +161,14 @@ export default function NotesAdminPage() {
     )
   }, [classStudents, studentSearch])
 
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (studentDropdownRef.current && !studentDropdownRef.current.contains(e.target as Node)) {
         setIsStudentDropdownOpen(false)
+      }
+      if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(e.target as Node)) {
+        setIsSubjectDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -145,14 +179,16 @@ export default function NotesAdminPage() {
     return allStudents.find(s => s.id === selectedStudentId)
   }, [allStudents, selectedStudentId])
 
+  // Auto-Fetch Individual
   useEffect(() => {
     if (mode === 'individual' && selectedStudentId) {
       fetchGradesForIndividual(selectedStudentId, selectedSemester)
     }
   }, [mode, selectedStudentId, selectedSemester])
 
+  // Auto-Fetch Class Mode
   useEffect(() => {
-    if (mode === 'class' && selectedClassId) {
+    if (mode === 'class' && selectedClassId && selectedSubject) {
       fetchGradesForClassMode(selectedClassId, selectedSubject, selectedSemester, selectedExamType)
     }
   }, [mode, selectedClassId, selectedSubject, selectedSemester, selectedExamType, classStudents])
@@ -182,12 +218,16 @@ export default function NotesAdminPage() {
       const json = await res.json()
       const existingGrades: GradeItem[] = json.data ?? []
 
+      // Get default coefficient for selected subject
+      const activeSubjObj = MOROCCAN_SUBJECTS_CATALOG.find((s: Subject) => s.name === subject)
+      const defaultCoeff = activeSubjObj ? String(activeSubjObj.defaultCoefficient) : '1'
+
       const initialBulkState: Record<string, { score: string; coefficient: string; comment: string }> = {}
       classStudents.forEach(st => {
         const gradeObj = existingGrades.find(g => g.student_id === st.id && (g.exam_type || 'controle_continu') === examType)
         initialBulkState[st.id] = {
           score: gradeObj ? String(gradeObj.score) : '',
-          coefficient: gradeObj ? String(gradeObj.coefficient) : '1',
+          coefficient: gradeObj ? String(gradeObj.coefficient) : defaultCoeff,
           comment: gradeObj?.comment || '',
         }
       })
@@ -276,6 +316,7 @@ export default function NotesAdminPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gestion des Notes & Examens</h1>
@@ -290,7 +331,7 @@ export default function NotesAdminPage() {
             <Calculator size={15} /> Simulateur What-If
           </Link>
           <Link
-            href="/admin/exam-config"
+            href="/admin/settings/exams"
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition"
           >
             <Award size={15} /> Config Examens
@@ -321,13 +362,13 @@ export default function NotesAdminPage() {
         </div>
       </div>
 
-      {/* Bar des Filtres en Cascades */}
+      {/* Cascading Filters Bar */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          {/* 1. Classe */}
+          {/* 1. Classe & Niveau */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              1. Classe & Niveau
+              1. Classe & Niveau *
             </label>
             <select
               id="filter-class-select"
@@ -345,9 +386,10 @@ export default function NotesAdminPage() {
             </select>
           </div>
 
-          {/* 2. Élève ou Matière */}
+          {/* 2. MODE INDIVIDUEL (Student Combobox) vs MODE CLASSE (Subject Combobox) */}
           {mode === 'individual' ? (
-            <div className="relative" ref={dropdownRef}>
+            /* Student Searchable Select */
+            <div className="relative" ref={studentDropdownRef}>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 2. Élève (Recherche)
               </label>
@@ -374,7 +416,7 @@ export default function NotesAdminPage() {
               {isStudentDropdownOpen && selectedClassId && (
                 <div className="absolute z-30 top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
-                    <Search size={16} className="text-slate-400 ml-1" />
+                    <Search size={16} className="text-slate-400 ml-1 flex-shrink-0" />
                     <input
                       type="text"
                       value={studentSearch}
@@ -412,18 +454,76 @@ export default function NotesAdminPage() {
               )}
             </div>
           ) : (
-            <div>
+            /* 🌟 2. MATIÈRE (Searchable Select / Combobox Dependent on Class) */
+            <div className="relative" ref={subjectDropdownRef}>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                2. Matière
+                2. Matière (Programme Oficial) *
               </label>
-              <input
-                id="filter-subject-input"
-                type="text"
-                value={selectedSubject}
-                onChange={e => setSelectedSubject(e.target.value)}
-                placeholder="ex: Mathématiques, Arabe, Physique"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <div
+                onClick={() => selectedClassId && setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-medium bg-white flex items-center justify-between transition cursor-pointer ${
+                  !selectedClassId
+                    ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
+                    : isSubjectDropdownOpen
+                    ? 'border-blue-500 ring-2 ring-blue-500/20 text-slate-900'
+                    : 'border-slate-200 text-slate-800 hover:border-slate-300'
+                }`}
+              >
+                <span className="truncate flex items-center gap-2">
+                  <BookOpen size={16} className="text-slate-400 flex-shrink-0" />
+                  {!selectedClassId
+                    ? 'Choisissez d\'abord une classe'
+                    : selectedSubject
+                    ? selectedSubject
+                    : 'Sélectionner une matière...'}
+                </span>
+                <ChevronDown size={16} className="text-slate-400 flex-shrink-0" />
+              </div>
+
+              {isSubjectDropdownOpen && selectedClassId && (
+                <div className="absolute z-30 top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
+                    <Search size={16} className="text-slate-400 ml-1 flex-shrink-0" />
+                    <input
+                      type="text"
+                      value={subjectSearch}
+                      onChange={e => setSubjectSearch(e.target.value)}
+                      placeholder="Tapez le nom de la matière..."
+                      autoFocus
+                      className="w-full bg-transparent text-sm text-slate-800 focus:outline-none placeholder:text-slate-400 font-medium"
+                    />
+                  </div>
+                  <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+                    {filteredSubjectOptions.length === 0 ? (
+                      <div className="p-3.5 text-center text-xs text-slate-400">Aucune matière trouvée</div>
+                    ) : (
+                      filteredSubjectOptions.map(sub => (
+                        <div
+                          key={sub.id}
+                          onClick={() => {
+                            setSelectedSubject(sub.name)
+                            setIsSubjectDropdownOpen(false)
+                            setSubjectSearch('')
+                          }}
+                          className={`px-4 py-2.5 text-sm cursor-pointer flex items-center justify-between transition ${
+                            selectedSubject === sub.name
+                              ? 'bg-blue-50 text-blue-700 font-bold'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{sub.name}</span>
+                            <span className="text-slate-400 text-xs font-normal">({sub.code})</span>
+                          </div>
+                          <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
+                            Coeff. ×{sub.defaultCoefficient}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -444,7 +544,7 @@ export default function NotesAdminPage() {
             </select>
           </div>
 
-          {/* Refresh / Add Button */}
+          {/* Refresh Button */}
           <div className="flex gap-2">
             <button
               onClick={handleManualRefresh}
@@ -466,7 +566,7 @@ export default function NotesAdminPage() {
           </div>
         </div>
 
-        {/* 🌟 ON-THE-FLY EXAM TYPE SELECTION FOR CERTIFICATION YEARS */}
+        {/* Dynamic Exam Tabs */}
         {selectedClassId && availableExamTypes.length > 1 && mode === 'class' && (
           <div className="pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap animate-in fade-in">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-2">Type d'examen :</span>
