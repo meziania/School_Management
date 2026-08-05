@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/auth/get-session'
 import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Settings } from 'lucide-react'
+import { Settings, CheckCircle2 } from 'lucide-react'
 import AdminAttendanceGrid from '@/components/presence/AdminAttendanceGrid'
 import PresenceFilterBar from '@/components/presence/PresenceFilterBar'
 
@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: 'Présence — EcoleConnect' }
 export default async function PresencePage({
   searchParams,
 }: {
-  searchParams: Promise<{ class_id?: string; date?: string; period?: string }>
+  searchParams: Promise<{ class_id?: string; date?: string; period?: string; success?: string }>
 }) {
   await requireAdmin()
   const supabase = await createClient()
@@ -62,6 +62,13 @@ export default async function PresencePage({
           Paramètres Assiduité
         </Link>
       </div>
+
+      {params.success && (
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-sm flex items-center gap-2">
+          <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
+          L'appel a été enregistré avec succès dans la base de données !
+        </div>
+      )}
 
       {/* 🌟 Barre de Filtres en Cascade (1. Niveau -> 2. Classe -> 3. Date -> 4. Période) */}
       <PresenceFilterBar
