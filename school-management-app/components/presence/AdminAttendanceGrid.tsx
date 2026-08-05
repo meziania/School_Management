@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, CheckCircle2, AlertCircle, UserCheck, UserX, Paperclip, FileText, Upload } from 'lucide-react'
+import { Search, CheckCircle2, AlertCircle, UserCheck, UserX, Paperclip, CheckSquare } from 'lucide-react'
 import Pagination from '@/components/ui/Pagination'
 
 interface StudentItem {
@@ -25,6 +25,12 @@ interface AdminAttendanceGridProps {
   className?: string
   students: StudentItem[]
   existingAttendance: AttendanceRecord[]
+}
+
+interface JustificationState {
+  motif: string
+  fileName: string
+  manualOverride: boolean
 }
 
 export default function AdminAttendanceGrid({
@@ -52,15 +58,16 @@ export default function AdminAttendanceGrid({
 
   const [statusMap, setStatusMap] = useState<Record<string, string>>(initialMap)
 
-  // Justification data per student: { motif: string, fileName: string }
-  const [justifications, setJustifications] = useState<Record<string, { motif: string; fileName: string }>>(() => {
-    const map: Record<string, { motif: string; fileName: string }> = {}
+  // Justification data per student: { motif: string, fileName: string, manualOverride: boolean }
+  const [justifications, setJustifications] = useState<Record<string, JustificationState>>(() => {
+    const map: Record<string, JustificationState> = {}
     students.forEach(s => {
       const rec = existingAttendance.find(a => a.student_id === s.id)
       if (rec?.notes || rec?.justification_path || rec?.is_justified) {
         map[s.id] = {
           motif: rec.notes || '',
           fileName: rec.justification_path ? rec.justification_path.split('/').pop() || 'justificatif.pdf' : '',
+          manualOverride: Boolean(rec.is_justified && !rec.justification_path),
         }
       }
     })
@@ -126,7 +133,7 @@ export default function AdminAttendanceGrid({
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            {/* 🌟 Dynamic Title Syncing with selected Class, Level, Date, and Period */}
+            {/* Dynamic Title Syncing with selected Class, Level, Date, and Period */}
             <h2 className="font-extrabold text-slate-900 text-lg tracking-tight">
               {className || 'Classe'} — {new Date(selectedDate).toLocaleDateString('fr-FR')} {formattedPeriod}
             </h2>
@@ -140,7 +147,7 @@ export default function AdminAttendanceGrid({
             </div>
           </div>
 
-          {/* 🌟 Bulk Actions (Tout Marquer: Présents / Absents) */}
+          {/* Bulk Actions (Tout Marquer: Présents / Absents) */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tout marquer :</span>
             <button
@@ -225,11 +232,14 @@ export default function AdminAttendanceGrid({
                 const globalIdx = (currentPage - 1) * itemsPerPage + idx + 1
                 const currentStatus = statusMap[student.id] || 'present'
                 const isAbsent = currentStatus === 'absent'
-                const justif = justifications[student.id] || { motif: '', fileName: '' }
+                const justif = justifications[student.id] || { motif: '', fileName: '', manualOverride: false }
 
-                // 🌟 Smart Justification Auto-detection:
-                // If user uploads a file OR types a non-empty motif -> set isJustified to true!
-                const isJustified = isAbsent && Boolean(justif.fileName || (justif.motif && justif.motif.trim().length > 0))
+                // 🌟 STRICT JUSTIFICATION LOGIC FIX:
+                // Typing in 'motif' ONLY DOES NOT trigger is_justified.
+                // is_justified is true ONLY IF:
+                // 1. A file is uploaded (fileName is present) OR
+                // 2. The manual override checkbox 'manualOverride' is explicitly checked by admin!
+                const isJustified = isAbsent && Boolean(justif.fileName || justif.manualOverride)
 
                 return (
                   <tr key={student.id} className="hover:bg-slate-50/50 transition">
@@ -251,7 +261,7 @@ export default function AdminAttendanceGrid({
                           </span>
                         </div>
 
-                        {/* 🌟 Status Buttons + Smart Confirmation Badge */}
+                        {/* Status Buttons + Strict Justification Confirmation Badge */}
                         <div className="flex items-center gap-3">
                           {/* Confirmation Badge for Absent status */}
                           {isAbsent && (
@@ -293,19 +303,38 @@ export default function AdminAttendanceGrid({
                         </div>
                       </div>
 
-                      {/* 🌟 Conditional File Upload & Reason Section (Revealed ONLY when Absent) */}
+                      {/* Conditional Absence Section (Revealed ONLY when Absent) */}
                       {isAbsent && (
                         <div className="px-5 py-3.5 bg-red-50/40 border-t border-red-100/70 border-b border-slate-100 animate-fadeIn space-y-3">
-                          <div className="flex items-center gap-2 text-red-700 font-bold text-xs">
-                            <Paperclip size={14} />
-                            <span>Justification de l'absence (Saisissez un motif ou joignez un fichier pour passer en 'Justifiée')</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-red-700 font-bold text-xs">
+                              <Paperclip size={14} />
+                              <span>Justification de l'absence (Joignez un document ou cochez la validation manuelle)</span>
+                            </div>
+
+                            {/* 🌟 Option B: Manual Validation Checkbox */}
+                            <label className="flex items-center gap-2 cursor-pointer select-none bg-white px-3 py-1 rounded-lg border border-red-200 shadow-2xs hover:bg-slate-50 transition">
+                              <input
+                                type="checkbox"
+                                checked={justif.manualOverride || false}
+                                onChange={e => setJustifications({
+                                  ...justifications,
+                                  [student.id]: { ...justif, manualOverride: e.target.checked },
+                                })}
+                                className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                              />
+                              <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                <CheckSquare size={13} className="text-emerald-600" />
+                                Valider la justification (sans fichier)
+                              </span>
+                            </label>
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {/* Motif Input */}
+                            {/* Motif / Remarque Input (Strictly text context, does NOT auto-toggle badge) */}
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                                Motif / Certificat Médical :
+                                Motif / Remarque explicative :
                               </label>
                               <input
                                 type="text"
@@ -315,15 +344,15 @@ export default function AdminAttendanceGrid({
                                   ...justifications,
                                   [student.id]: { ...justif, motif: e.target.value },
                                 })}
-                                placeholder="ex: Certificat médical, Raison familiale..."
+                                placeholder="ex: Appel du parent, Raison familiale, Maladie..."
                                 className="w-full px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-400"
                               />
                             </div>
 
-                            {/* File Upload Input */}
+                            {/* Option A: File Upload Input (Attaching file auto-toggles badge to green) */}
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                                Joindre un document (PDF, Image) :
+                                Joindre un document (PDF, Certificat médical, Image) :
                               </label>
                               <input
                                 type="file"
