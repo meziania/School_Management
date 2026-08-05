@@ -11,6 +11,8 @@ import {
   GraduationCap,
 } from 'lucide-react'
 
+import TeacherLogoutButton from '@/components/layout/TeacherLogoutButton'
+
 export default async function TeacherLayout({
   children,
 }: {
@@ -63,15 +65,7 @@ export default async function TeacherLayout({
 
         {/* Déconnexion */}
         <div className="p-4 border-t border-slate-800">
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-red-400 hover:bg-slate-800 transition"
-            >
-              <LogOut size={16} />
-              Déconnexion
-            </button>
-          </form>
+          <TeacherLogoutButton />
         </div>
       </aside>
 
