@@ -1,6 +1,8 @@
 import { requireAdmin } from '@/lib/auth/get-session'
 import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { Settings } from 'lucide-react'
 import AdminAttendanceGrid from '@/components/presence/AdminAttendanceGrid'
 import PresenceFilterBar from '@/components/presence/PresenceFilterBar'
 
@@ -47,9 +49,18 @@ export default async function PresencePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Présence & Appel Quotidien</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Saisie et suivi de l'assiduité des élèves par classe</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Présence & Appel Quotidien</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Saisie et suivi de l'assiduité des élèves par classe</p>
+        </div>
+        <Link
+          href="/admin/settings/assiduite"
+          className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition shadow-sm"
+        >
+          <Settings size={16} />
+          Paramètres Assiduité
+        </Link>
       </div>
 
       {/* 🌟 Barre de Filtres en Cascade (1. Niveau -> 2. Classe -> 3. Date -> 4. Période) */}

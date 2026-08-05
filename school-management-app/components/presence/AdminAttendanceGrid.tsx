@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, CheckCircle2, UserCheck, UserX, Paperclip, FileText, Upload } from 'lucide-react'
+import { Search, CheckCircle2, AlertCircle, UserCheck, UserX, Paperclip, FileText, Upload } from 'lucide-react'
 import Pagination from '@/components/ui/Pagination'
 
 interface StudentItem {
@@ -13,6 +13,7 @@ interface StudentItem {
 interface AttendanceRecord {
   student_id: string
   status: 'present' | 'absent'
+  is_justified?: boolean
   justification_path?: string
   notes?: string
 }
@@ -56,7 +57,7 @@ export default function AdminAttendanceGrid({
     const map: Record<string, { motif: string; fileName: string }> = {}
     students.forEach(s => {
       const rec = existingAttendance.find(a => a.student_id === s.id)
-      if (rec?.notes || rec?.justification_path) {
+      if (rec?.notes || rec?.justification_path || rec?.is_justified) {
         map[s.id] = {
           motif: rec.notes || '',
           fileName: rec.justification_path ? rec.justification_path.split('/').pop() || 'justificatif.pdf' : '',
@@ -226,9 +227,18 @@ export default function AdminAttendanceGrid({
                 const isAbsent = currentStatus === 'absent'
                 const justif = justifications[student.id] || { motif: '', fileName: '' }
 
+                // 🌟 Smart Justification Auto-detection:
+                // If user uploads a file OR types a non-empty motif -> set isJustified to true!
+                const isJustified = isAbsent && Boolean(justif.fileName || (justif.motif && justif.motif.trim().length > 0))
+
                 return (
                   <tr key={student.id} className="hover:bg-slate-50/50 transition">
                     <td colSpan={3} className="p-0">
+                      {/* Hidden input to transmit is_justified boolean to backend */}
+                      {isAbsent && (
+                        <input type="hidden" name={`is_justified_${student.id}`} value={isJustified ? 'true' : 'false'} />
+                      )}
+
                       {/* Main Row */}
                       <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
                         <div className="flex items-center gap-3">
@@ -241,30 +251,45 @@ export default function AdminAttendanceGrid({
                           </span>
                         </div>
 
-                        {/* 🌟 Status Buttons: ONLY Présent vs Absent */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setStatusMap({ ...statusMap, [student.id]: 'present' })}
-                            className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all duration-150 ${
-                              currentStatus === 'present'
-                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm scale-105'
-                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                            }`}
-                          >
-                            Présent
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setStatusMap({ ...statusMap, [student.id]: 'absent' })}
-                            className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all duration-150 ${
-                              currentStatus === 'absent'
-                                ? 'bg-red-600 text-white border-red-600 shadow-sm scale-105'
-                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                            }`}
-                          >
-                            Absent
-                          </button>
+                        {/* 🌟 Status Buttons + Smart Confirmation Badge */}
+                        <div className="flex items-center gap-3">
+                          {/* Confirmation Badge for Absent status */}
+                          {isAbsent && (
+                            isJustified ? (
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-[11px] flex items-center gap-1 animate-fadeIn">
+                                <CheckCircle2 size={13} /> Absence Justifiée
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-[11px] flex items-center gap-1 animate-fadeIn">
+                                <AlertCircle size={13} /> Non Justifiée
+                              </span>
+                            )
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setStatusMap({ ...statusMap, [student.id]: 'present' })}
+                              className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all duration-150 ${
+                                currentStatus === 'present'
+                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm scale-105'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              Présent
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStatusMap({ ...statusMap, [student.id]: 'absent' })}
+                              className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all duration-150 ${
+                                currentStatus === 'absent'
+                                  ? 'bg-red-600 text-white border-red-600 shadow-sm scale-105'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              Absent
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -273,7 +298,7 @@ export default function AdminAttendanceGrid({
                         <div className="px-5 py-3.5 bg-red-50/40 border-t border-red-100/70 border-b border-slate-100 animate-fadeIn space-y-3">
                           <div className="flex items-center gap-2 text-red-700 font-bold text-xs">
                             <Paperclip size={14} />
-                            <span>Justification de l'absence (Optionnel)</span>
+                            <span>Justification de l'absence (Saisissez un motif ou joignez un fichier pour passer en 'Justifiée')</span>
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -300,23 +325,19 @@ export default function AdminAttendanceGrid({
                               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                                 Joindre un document (PDF, Image) :
                               </label>
-                              <div className="relative flex items-center">
-                                <input
-                                  type="file"
-                                  name={`justification_file_${student.id}`}
-                                  accept=".pdf,image/*"
-                                  onChange={e => {
-                                    const file = e.target.files?.[0]
-                                    if (file) {
-                                      setJustifications({
-                                        ...justifications,
-                                        [student.id]: { ...justif, fileName: file.name },
-                                      })
-                                    }
-                                  }}
-                                  className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-red-100 file:text-red-700 hover:file:bg-red-200 cursor-pointer bg-white border border-red-200 rounded-lg py-1 px-2"
-                                />
-                              </div>
+                              <input
+                                type="file"
+                                name={`justification_file_${student.id}`}
+                                accept=".pdf,image/*"
+                                onChange={e => {
+                                  const file = e.target.files?.[0]
+                                  setJustifications({
+                                    ...justifications,
+                                    [student.id]: { ...justif, fileName: file ? file.name : '' },
+                                  })
+                                }}
+                                className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-red-100 file:text-red-700 hover:file:bg-red-200 cursor-pointer bg-white border border-red-200 rounded-lg py-1 px-2"
+                              />
                             </div>
                           </div>
                         </div>

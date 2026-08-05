@@ -103,13 +103,24 @@ export interface Attendance {
   school_id: string
   student_id: string
   date: string
-  status: AttendanceStatus
+  status: 'present' | 'absent' | 'PRESENT' | 'ABSENT' | AttendanceStatus
   justification: string | null
   is_justified: boolean
-  justified_file: string | null
+  justification_file_url?: string | null
+  justified_file?: string | null
+  motif?: string | null
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+export interface SchoolSettings {
+  id?: string
+  school_id: string
+  deduction_per_unjustified_absence: number
+  deduction_per_justified_absence: number
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Grade {
