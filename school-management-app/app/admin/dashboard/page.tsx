@@ -2,7 +2,8 @@ import { requireAdmin } from '@/lib/auth/get-session'
 import { createClient } from '@/lib/supabase/server'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Users, GraduationCap, ClipboardList, MessageSquare, AlertCircle, FileText } from 'lucide-react'
+import { Users, GraduationCap, ClipboardList, MessageSquare } from 'lucide-react'
+import DashboardAlerts from '@/components/dashboard/DashboardAlerts'
 
 export const metadata: Metadata = {
   title: 'Tableau de bord Admin — EcoleConnect',
@@ -20,19 +21,15 @@ export default async function AdminDashboardPage() {
     { count: totalClasses },
     { data: todayAttendance },
     { count: unreadMessages },
-    { count: pendingJustifications },
   ] = await Promise.all([
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('classes').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('attendance').select('status').eq('date', today),
     supabase.from('messages').select('*', { count: 'exact', head: true })
       .eq('receiver_id', profile.id).eq('is_read', false),
-    supabase.from('attendance').select('*', { count: 'exact', head: true })
-      .eq('status', 'absent').eq('is_justified', false).not('justification', 'is', null),
   ])
 
   const absentToday = todayAttendance?.filter(a => a.status === 'absent').length ?? 0
-  const lateToday = todayAttendance?.filter(a => a.status === 'late').length ?? 0
 
   const kpis = [
     {
@@ -89,36 +86,8 @@ export default async function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* Alertes */}
-      {((pendingJustifications ?? 0) > 0 || lateToday > 0) && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-slate-800">Alertes</h2>
-          <div className="grid gap-3">
-            {(pendingJustifications ?? 0) > 0 && (
-              <Link href="/admin/justificatifs"
-                className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition">
-                <FileText className="text-amber-600 flex-shrink-0" size={20} />
-                <div>
-                  <p className="font-medium text-amber-900">
-                    {pendingJustifications} justificatif{(pendingJustifications ?? 0) > 1 ? 's' : ''} en attente
-                  </p>
-                  <p className="text-amber-700 text-sm">Cliquez pour examiner</p>
-                </div>
-              </Link>
-            )}
-            {lateToday > 0 && (
-              <Link href="/admin/presence"
-                className="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-xl hover:bg-yellow-100 transition">
-                <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
-                <div>
-                  <p className="font-medium text-yellow-900">{lateToday} élève{lateToday > 1 ? 's' : ''} en retard aujourd'hui</p>
-                  <p className="text-yellow-700 text-sm">Voir la feuille de présence</p>
-                </div>
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      {/* 🌟 DYNAMIC ALERTES DRIVEN BY GLOBAL STORE */}
+      <DashboardAlerts />
 
       {/* Raccourcis */}
       <div>
