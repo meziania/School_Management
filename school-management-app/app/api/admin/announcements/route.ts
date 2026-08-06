@@ -1,6 +1,21 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+function extractClassUuid(targetsList: any): string | null {
+  if (!Array.isArray(targetsList)) return null
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+  for (const t of targetsList) {
+    if (typeof t === 'string') {
+      const cleaned = t.replace(/^class:/, '').trim()
+      if (uuidRegex.test(cleaned)) {
+        return cleaned
+      }
+    }
+  }
+  return null
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -76,8 +91,7 @@ export async function POST(request: Request) {
       school_id = dbUser?.school_id
     }
 
-    const classTarget = targets.find(t => t.startsWith('class:'))
-    const class_id = classTarget ? classTarget.replace('class:', '') : null
+    const class_id = extractClassUuid(targets)
 
     const { data: announcement, error } = await supabase
       .from('announcements')
@@ -157,8 +171,7 @@ export async function PUT(request: Request) {
       school_id = dbUser?.school_id
     }
 
-    const classTarget = targets?.find((t: string) => t.startsWith('class:'))
-    const class_id = classTarget ? classTarget.replace('class:', '') : null
+    const class_id = extractClassUuid(targets)
 
     const updatePayload: any = {
       title: title.trim(),
