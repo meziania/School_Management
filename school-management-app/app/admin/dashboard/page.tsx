@@ -28,7 +28,7 @@ export default async function AdminDashboardPage() {
     supabase.from('messages').select('*', { count: 'exact', head: true })
       .eq('receiver_id', profile.id).eq('is_read', false),
     supabase.from('attendance').select('*', { count: 'exact', head: true })
-      .eq('status', 'absent').eq('is_justified', false),
+      .eq('status', 'absent').eq('is_justified', false).not('justification', 'is', null),
   ])
 
   const absentToday = todayAttendance?.filter(a => a.status === 'absent').length ?? 0
